@@ -22,6 +22,7 @@ fn main() -> Result<(), std::convert::Infallible> {
     //let mut display: SimulatorDisplay<BinaryColor> = SimulatorDisplay::new(Size::new(128, 64));
     //let mut window = Window::new("Progress", &output_settings);
 
+    // Initialize Display
     let i2c = I2c::new().unwrap();
     let interface = I2CDisplayInterface::new(i2c);
     let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
@@ -31,11 +32,11 @@ fn main() -> Result<(), std::convert::Infallible> {
     // Key Input
     let mut key_logger = KeyLogger::new();
 
-    mode::progress(&mut display);
+    mode::progress(&mut display).unwrap();
 
     sleep(Duration::from_millis(500));
 
-    mode::shouting(display, &mut key_logger);
+    mode::shouting(display, &mut key_logger).unwrap();
 
     loop {
         sleep(Duration::from_millis(10));

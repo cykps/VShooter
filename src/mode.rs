@@ -47,7 +47,16 @@ pub fn shouting(
     (),
 > {
     let mut player1 = Player::new(10, 32);
-    let mut player1 = Player::new(128 - 10, 32);
+    let mut player2 = Player::new(128 - 10, 32);
+
+    loop {
+        display.clear(BinaryColor::Off).unwrap();
+
+        let keys = key_logger.get_unread_keys();
+        for key in keys {
+            println!("{:?}", key);
+        }
+    }
 
     Ok(())
 }
