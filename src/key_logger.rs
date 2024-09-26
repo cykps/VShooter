@@ -6,7 +6,7 @@ use std::{
     thread,
 };
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Key {
     pub unix: i64,
     pub delta: i64,
