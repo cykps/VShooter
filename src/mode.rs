@@ -95,7 +95,11 @@ impl Bullet {
     }
 
     fn fly(&mut self) {
-        self.transfer(self.speed, 0);
+        if self.direction == Direction::Right {
+            self.transfer(self.speed, 0);
+        } else {
+            self.transfer(-self.speed, 0);
+        }
     }
 
     fn draw(
@@ -162,8 +166,8 @@ pub fn shouting(
                     "K" => player2.step(1, 0),
                     "I" => player2.step(0, -1),
                     "M" => player2.step(0, 1),
-                    "LMeta" => bullets.push(Bullet::new(player1.x, player2.y, Direction::Right)),
-                    "Rmeta" => bullets.push(Bullet::new(player1.x, player2.y, Direction::Right)),
+                    "LMeta" => bullets.push(Bullet::new(player1.x, player1.y, Direction::Right)),
+                    "RMeta" => bullets.push(Bullet::new(player2.x, player2.y, Direction::Right)),
                     _ => (),
                 }
             }
