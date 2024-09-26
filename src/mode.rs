@@ -33,7 +33,7 @@ struct Player {
 
 impl Player {
     fn new(x: i32, y: i32) -> Self {
-        let step = 3;
+        let step = 2;
         Player { x, y, step }
     }
 
@@ -86,8 +86,16 @@ pub fn shouting(
         for key_conf in keys {
             for key in key_conf.keyboard {
                 println!("{:?}", key);
-                if key == "J" {
-                    player2.step(-1, 0);
+                match key.as_str() {
+                    "F" => player1.step(1, 0),
+                    "D" => player1.step(-1, 0),
+                    "C" => player1.step(0, 1),
+                    "R" => player1.step(0, -1),
+                    "J" => player2.step(-1, 0),
+                    "K" => player2.step(1, 0),
+                    "I" => player2.step(0, -1),
+                    "M" => player2.step(0, 1),
+                    _ => (),
                 }
             }
         }
@@ -98,8 +106,6 @@ pub fn shouting(
         display.flush().unwrap();
         thread::sleep(Duration::from_millis(10));
     }
-
-    Ok(())
 }
 
 pub fn progress(
