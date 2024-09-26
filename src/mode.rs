@@ -8,7 +8,7 @@ use embedded_graphics::{
     },
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Arc, PrimitiveStyleBuilder, Rectangle, StrokeAlignment},
+    primitives::{Arc, PrimitiveStyleBuilder, Rectangle, StrokeAlignment, Triangle},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
 use rppal::i2c::I2c;
@@ -34,7 +34,7 @@ struct Player {
 impl Player {
     fn new(x: i32, y: i32) -> Self {
         let step = 2;
-        Player { x, y, step }
+        Self { x, y, step }
     }
 
     fn transfer(&mut self, x: i32, y: i32) {
@@ -58,10 +58,76 @@ impl Player {
             .fill_color(BinaryColor::On)
             .build();
 
-        Rectangle::new(Point::new(self.x, self.y), Size::new(3, 3))
+        Rectangle::new(Point::new(self.x, self.y), Size::new(5, 5))
             .into_styled(style)
             .draw(display)
             .unwrap();
+    }
+}
+
+#[derive(PartialEq)]
+enum Direction {
+    Right,
+    Left,
+}
+
+struct Bullet {
+    x: i32,
+    y: i32,
+    speed: i32,
+    direction: Direction,
+}
+
+impl Bullet {
+    fn new(x: i32, y: i32, direction: Direction) -> Self {
+        let speed = 1;
+        Self {
+            x,
+            y,
+            speed,
+            direction,
+        }
+    }
+
+    fn transfer(&mut self, x: i32, y: i32) {
+        self.x += x;
+        self.y += y;
+    }
+
+    fn fly(&mut self) {
+        self.transfer(self.speed, 0);
+    }
+
+    fn draw(
+        &mut self,
+        display: &mut Ssd1306<
+            I2CInterface<I2c>,
+            DisplaySize128x64,
+            BufferedGraphicsMode<DisplaySize128x64>,
+        >,
+    ) {
+        let style = PrimitiveStyleBuilder::new()
+            .fill_color(BinaryColor::On)
+            .build();
+        if self.direction == Direction::Right {
+            Triangle::new(
+                Point::new(self.x, self.y),
+                Point::new(self.x - 4, self.y + 1),
+                Point::new(self.x - 4, self.y - 1),
+            )
+            .into_styled(style)
+            .draw(display)
+            .unwrap();
+        } else {
+            Triangle::new(
+                Point::new(self.x, self.y),
+                Point::new(self.x + 4, self.y + 1),
+                Point::new(self.x + 4, self.y - 1),
+            )
+            .into_styled(style)
+            .draw(display)
+            .unwrap();
+        }
     }
 }
 
@@ -78,6 +144,7 @@ pub fn shouting(
 > {
     let mut player1 = Player::new(10, 32);
     let mut player2 = Player::new(128 - 10, 32);
+    let mut bullets: Vec<Bullet> = Vec::new();
 
     loop {
         display.clear(BinaryColor::Off).unwrap();
@@ -95,6 +162,8 @@ pub fn shouting(
                     "K" => player2.step(1, 0),
                     "I" => player2.step(0, -1),
                     "M" => player2.step(0, 1),
+                    "LMeta" => bullets.push(Bullet::new(player1.x, player2.y, Direction::Right)),
+                    "Rmeta" => bullets.push(Bullet::new(player1.x, player2.y, Direction::Right)),
                     _ => (),
                 }
             }
@@ -102,6 +171,10 @@ pub fn shouting(
 
         player1.draw(display);
         player2.draw(display);
+        for bullet in bullets.iter_mut() {
+            bullet.fly();
+            bullet.draw(display);
+        }
 
         display.flush().unwrap();
         thread::sleep(Duration::from_millis(10));
