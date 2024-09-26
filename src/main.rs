@@ -31,7 +31,11 @@ fn main() -> Result<(), std::convert::Infallible> {
     // Key Input
     let mut key_logger = KeyLogger::new();
 
-    mode::progress(display);
+    mode::progress(&mut display);
+
+    sleep(Duration::from_millis(500));
+
+    mode::shouting(display, &mut key_logger);
 
     loop {
         sleep(Duration::from_millis(10));

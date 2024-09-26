@@ -22,8 +22,38 @@ use std::{
     time::Duration,
 };
 
-pub fn progress(
+use crate::key_logger::KeyLogger;
+
+struct Player {
+    x: u8,
+    y: u8,
+}
+
+impl Player {
+    fn new(x: u8, y: u8) -> Self {
+        Player { x, y }
+    }
+}
+
+pub fn shouting(
     mut display: Ssd1306<
+        I2CInterface<I2c>,
+        DisplaySize128x64,
+        BufferedGraphicsMode<DisplaySize128x64>,
+    >,
+    key_logger: &mut KeyLogger,
+) -> Result<
+    //Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>,
+    (),
+> {
+    let mut player1 = Player::new(10, 32);
+    let mut player1 = Player::new(128 - 10, 32);
+
+    Ok(())
+}
+
+pub fn progress(
+    display: &mut Ssd1306<
         I2CInterface<I2c>,
         DisplaySize128x64,
         BufferedGraphicsMode<DisplaySize128x64>,
@@ -40,11 +70,11 @@ pub fn progress(
         .build();
 
     Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
-        .draw(&mut display)
+        .draw(display)
         .unwrap();
 
     Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
-        .draw(&mut display)
+        .draw(display)
         .unwrap();
 
     display.flush().unwrap();
@@ -70,7 +100,7 @@ pub fn progress(
         // Draw an arc with a 5px wide stroke.
         Arc::new(Point::new(2 + 32, 2), 64 - 4, 90.0.deg(), sweep.deg())
             .into_styled(arc_stroke)
-            .draw(&mut display)
+            .draw(display)
             .unwrap();
 
         // Draw centered text.
@@ -81,7 +111,7 @@ pub fn progress(
             character_style,
             text_style,
         )
-        .draw(&mut display)
+        .draw(display)
         .unwrap();
 
         display.flush().unwrap();
