@@ -47,7 +47,7 @@ impl Player {
     }
 
     fn draw(
-        self,
+        &mut self,
         display: &mut Ssd1306<
             I2CInterface<I2c>,
             DisplaySize128x64,
@@ -66,7 +66,7 @@ impl Player {
 }
 
 pub fn shouting(
-    mut display: Ssd1306<
+    display: &mut Ssd1306<
         I2CInterface<I2c>,
         DisplaySize128x64,
         BufferedGraphicsMode<DisplaySize128x64>,
@@ -91,6 +91,12 @@ pub fn shouting(
                 }
             }
         }
+
+        player1.draw(display);
+        player2.draw(display);
+
+        display.flush().unwrap();
+        thread::sleep(Duration::from_millis(10));
     }
 
     Ok(())

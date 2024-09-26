@@ -36,7 +36,7 @@ fn main() -> Result<(), std::convert::Infallible> {
 
     sleep(Duration::from_millis(500));
 
-    mode::shouting(display, &mut key_logger).unwrap();
+    mode::shouting(&mut display, &mut key_logger).unwrap();
 
     loop {
         sleep(Duration::from_millis(10));
