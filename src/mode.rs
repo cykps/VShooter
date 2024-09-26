@@ -8,13 +8,14 @@ use embedded_graphics::{
     },
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Arc, PrimitiveStyleBuilder, StrokeAlignment},
+    primitives::{Arc, PrimitiveStyleBuilder, Rectangle, StrokeAlignment},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
 use rppal::i2c::I2c;
 use serde::ser::StdError;
 use serde::Serialize;
 use ssd1306::{mode::BufferedGraphicsMode, prelude::*, I2CDisplayInterface, Ssd1306};
+use std::fmt::Binary;
 use std::{borrow::BorrowMut, fs::OpenOptions};
 use std::{
     sync::{Arc as A, Mutex as M},
@@ -25,24 +26,42 @@ use std::{
 use crate::key_logger::KeyLogger;
 
 struct Player {
-    x: i64,
-    y: i64,
-    step: i64,
+    x: i32,
+    y: i32,
+    step: i32,
 }
 
 impl Player {
-    fn new(x: i64, y: i64) -> Self {
+    fn new(x: i32, y: i32) -> Self {
         let step = 3;
         Player { x, y, step }
     }
 
-    fn transfer(&mut self, x: i64, y: i64) {
+    fn transfer(&mut self, x: i32, y: i32) {
         self.x += x;
         self.y += y;
     }
 
-    fn step(&mut self, x: i64, y: i64) {
+    fn step(&mut self, x: i32, y: i32) {
         self.transfer(x * self.step, y * self.step);
+    }
+
+    fn draw(
+        self,
+        display: &mut Ssd1306<
+            I2CInterface<I2c>,
+            DisplaySize128x64,
+            BufferedGraphicsMode<DisplaySize128x64>,
+        >,
+    ) {
+        let style = PrimitiveStyleBuilder::new()
+            .fill_color(BinaryColor::On)
+            .build();
+
+        Rectangle::new(Point::new(self.x, self.y), Size::new(3, 3))
+            .into_styled(style)
+            .draw(display)
+            .unwrap();
     }
 }
 
