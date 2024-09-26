@@ -25,13 +25,24 @@ use std::{
 use crate::key_logger::KeyLogger;
 
 struct Player {
-    x: u8,
-    y: u8,
+    x: i64,
+    y: i64,
+    step: i64,
 }
 
 impl Player {
-    fn new(x: u8, y: u8) -> Self {
-        Player { x, y }
+    fn new(x: i64, y: i64) -> Self {
+        let step = 3;
+        Player { x, y, step }
+    }
+
+    fn transfer(&mut self, x: i64, y: i64) {
+        self.x += x;
+        self.y += y;
+    }
+
+    fn step(&mut self, x: i64, y: i64) {
+        self.transfer(x * self.step, y * self.step);
     }
 }
 
@@ -53,8 +64,13 @@ pub fn shouting(
         display.clear(BinaryColor::Off).unwrap();
 
         let keys = key_logger.get_unread_keys();
-        for key in keys {
-            println!("{:?}", key);
+        for key_conf in keys {
+            for key in key_conf.keyboard {
+                println!("{:?}", key);
+                if key == "J" {
+                    player2.step(-1, 0);
+                }
+            }
         }
     }
 
