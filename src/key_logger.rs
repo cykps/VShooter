@@ -1,75 +1,69 @@
 use chrono::prelude::*;
-use device_query::{DeviceQuery, DeviceState};
-use serde::Serialize;
+use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
 use std::{
     sync::{Arc as A, Mutex as M},
     thread,
 };
 
 #[derive(Debug, Clone)]
-pub struct Key {
+pub struct _Keys {
     pub unix: i64,
     pub delta: i64,
-    pub keyboard: Vec<String>,
+    pub keyboard: Vec<Keycode>,
 }
-type Keys = A<M<Vec<Key>>>;
+impl _Keys {
+    fn new() -> Self {
+        Self {
+            unix: 0,
+            delta: 0,
+            keyboard: Vec::new(),
+        }
+    }
+}
+
+type Keys = A<M<_Keys>>;
 
 #[derive(Debug, Clone)]
 pub struct KeyLogger {
     keys: Keys,
-    last_read_unix: i64,
 }
 
 impl KeyLogger {
     pub fn new() -> Self {
-        let keys = A::new(M::new(Vec::new()));
-        let key_log_clone = Keys::clone(&keys);
-        thread::spawn(move || Self::listener(key_log_clone));
-        Self {
-            keys,
-            last_read_unix: i64::MIN,
-        }
+        let keys: Keys = A::new(M::new(_Keys::new()));
+        let keys_clone = Keys::clone(&keys);
+        thread::spawn(move || Self::listener(keys_clone));
+        Self { keys }
+    }
+
+    pub fn get(&self) -> _Keys {
+        self.keys.lock().unwrap().clone()
     }
 
     fn listener(keys: Keys) {
         let device_state = DeviceState::new();
 
-        let mut prev_keys = vec![];
+        let mut prev_key_list = vec![];
         let mut prev_date: DateTime<Local> = Local::now();
-
         loop {
-            let local: DateTime<Local> = Local::now();
-            let unix = local.timestamp_millis();
-            let delta = local.timestamp_millis() - prev_date.timestamp_millis();
-
-            let typed_keys = device_state.get_keys();
-            if typed_keys != prev_keys && !typed_keys.is_empty() {
-                let key = Key {
-                    // time: local,
+            let key_list = device_state.get_keys();
+            if key_list != prev_key_list {
+                let date: DateTime<Local> = Local::now();
+                let unix = date.timestamp_millis();
+                let delta = date.timestamp_millis() - prev_date.timestamp_millis();
+                let _keys = _Keys {
                     unix,
                     delta,
-                    keyboard: typed_keys.iter().map(|key| key.to_string()).collect(),
+                    keyboard: key_list.clone(),
                 };
 
-                keys.lock().unwrap().push(key);
+                *keys.lock().unwrap() = _keys;
 
-                prev_date = local;
+                prev_date = date;
+                prev_key_list = key_list;
             }
-
-            prev_keys = typed_keys;
 
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-    }
-
-    pub fn get_unread_keys(&mut self) -> Vec<Key> {
-        let mut unread_keys: Vec<Key> = Vec::new();
-        for key in self.keys.lock().unwrap().iter() {
-            if key.unix > self.last_read_unix {
-                unread_keys.push(key.clone());
-                self.last_read_unix = key.unix;
-            }
-        }
-        unread_keys
     }
 }

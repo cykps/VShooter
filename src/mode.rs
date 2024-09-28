@@ -1,5 +1,6 @@
+use crate::key_logger::{KeyLogger, _Keys};
 use anyhow::Result;
-use device_query::{DeviceQuery, DeviceState};
+use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
 use embedded_graphics::{
     mono_font::{
@@ -12,29 +13,168 @@ use embedded_graphics::{
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
 use rppal::i2c::I2c;
-use serde::ser::StdError;
-use serde::Serialize;
-use ssd1306::{mode::BufferedGraphicsMode, prelude::*, I2CDisplayInterface, Ssd1306};
-use std::fmt::Binary;
-use std::{borrow::BorrowMut, fs::OpenOptions};
-use std::{
-    sync::{Arc as A, Mutex as M},
-    thread,
-    time::Duration,
-};
+use ssd1306::{mode::BufferedGraphicsMode, prelude::*, Ssd1306};
+use std::{thread, time::Duration};
 
-use crate::key_logger::KeyLogger;
+const tick_SIZE: Duration = Duration::from_millis(10);
 
+// Shouting Mode
+pub fn shouting(
+    display: &mut Ssd1306<
+        I2CInterface<I2c>,
+        DisplaySize128x64,
+        BufferedGraphicsMode<DisplaySize128x64>,
+    >,
+    key_logger: &mut KeyLogger,
+) -> Result<()> {
+    let mut objects: Objects = Vec::new();
+
+    let mut player1 = Player::new(
+        10,
+        32,
+        vec![Keycode::J],
+        vec![Keycode::K],
+        vec![Keycode::M],
+        vec![Keycode::I],
+    );
+    let mut player2 = Player::new(
+        128 - 10,
+        32,
+        vec![Keycode::F],
+        vec![Keycode::D],
+        vec![Keycode::R],
+        vec![Keycode::C],
+    );
+    objects.push(ObjectEnum::Player(player1));
+    objects.push(ObjectEnum::Player(player2));
+
+    // Main Loop
+    loop {
+        display.clear(BinaryColor::Off).unwrap();
+        //let key_list = key_logger.get().keyboard;
+        //
+        //for key in key_list {
+        //    println!("{:?}", key);
+        //    match key.as_str() {
+        //        "F" => player1.step(1, 0),
+        //        "D" => player1.step(-1, 0),
+        //        "C" => player1.step(0, 1),
+        //        "R" => player1.step(0, -1),
+        //        "J" => player2.step(-1, 0),
+        //        "K" => player2.step(1, 0),
+        //        "I" => player2.step(0, -1),
+        //        "M" => player2.step(0, 1),
+        //        "LMeta" => objects.push(ObjectEnum::Bullet(Bullet::new(
+        //            player1.x,
+        //            player1.y,
+        //            Direction::Right,
+        //        ))),
+        //        "RMeta" => objects.push(ObjectEnum::Bullet(Bullet::new(
+        //            player2.x,
+        //            player2.y,
+        //            Direction::Left,
+        //        ))),
+        //        _ => (),
+        //    }
+        //}
+        let key_list = key_logger.get().keyboard;
+
+        // Keybind
+        for object in &mut objects {
+            object.receive_key_bind(&key_list);
+        }
+
+        // Tick
+        for object in &mut objects {
+            object.tick();
+        }
+
+        // Draw
+        for object in &mut objects {
+            object.draw(display);
+        }
+
+        display.flush().unwrap();
+        thread::sleep(tick_SIZE);
+    }
+}
+
+type Display =
+    Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>;
+type Objects = Vec<ObjectEnum>;
+type Keycodes = Vec<Keycode>;
+
+// Object Trait
+trait Object {
+    fn tick(&mut self) {}
+}
+
+trait DrawableObj {
+    fn draw(&mut self, display: &mut Display) {}
+}
+
+trait ReceivableKeyBindObj {
+    fn receive_key_bind(&mut self, keys: &Keycodes) {}
+}
+
+enum ObjectEnum {
+    Player(Player),
+    Bullet(Bullet),
+}
+impl Object for ObjectEnum {
+    fn tick(&mut self) {
+        match self {
+            Self::Player(o) => o.tick(),
+            Self::Bullet(o) => o.tick(),
+        }
+    }
+}
+impl DrawableObj for ObjectEnum {
+    fn draw(&mut self, display: &mut Display) {
+        match self {
+            Self::Player(o) => o.draw(display),
+            Self::Bullet(o) => o.draw(display),
+        }
+    }
+}
+impl ReceivableKeyBindObj for ObjectEnum {
+    fn receive_key_bind(&mut self, keys: &Keycodes) {
+        match self {
+            Self::Player(o) => o.receive_key_bind(keys),
+            _ => (),
+        }
+    }
+}
+
+// Player
 struct Player {
     x: i32,
     y: i32,
     step: i32,
+    front_key: Vec<Keycode>,
+    back_key: Vec<Keycode>,
+    left_key: Vec<Keycode>,
+    right_key: Vec<Keycode>,
 }
-
 impl Player {
-    fn new(x: i32, y: i32) -> Self {
+    fn new(
+        x: i32,
+        y: i32,
+        front_key: Vec<Keycode>,
+        back_key: Vec<Keycode>,
+        left_key: Vec<Keycode>,
+        right_key: Vec<Keycode>,
+    ) -> Self {
         let step = 2;
-        Self { x, y, step }
+        Self {
+            x,
+            y,
+            step,
+            front_key,
+            back_key,
+            left_key,
+            right_key,
+        }
     }
 
     fn transfer(&mut self, x: i32, y: i32) {
@@ -45,32 +185,57 @@ impl Player {
     fn step(&mut self, x: i32, y: i32) {
         self.transfer(x * self.step, y * self.step);
     }
-
-    fn draw(
-        &mut self,
-        display: &mut Ssd1306<
-            I2CInterface<I2c>,
-            DisplaySize128x64,
-            BufferedGraphicsMode<DisplaySize128x64>,
-        >,
-    ) {
+}
+impl Object for Player {}
+impl DrawableObj for Player {
+    fn draw(&mut self, display: &mut Display) {
         let style = PrimitiveStyleBuilder::new()
             .fill_color(BinaryColor::On)
             .build();
 
-        Rectangle::new(Point::new(self.x, self.y), Size::new(5, 5))
+        Rectangle::new(Point::new(self.x - 2, self.y - 2), Size::new(5, 5))
             .into_styled(style)
             .draw(display)
             .unwrap();
     }
 }
-
-#[derive(PartialEq)]
-enum Direction {
-    Right,
-    Left,
+impl ReceivableKeyBindObj for Player {
+    fn receive_key_bind(&mut self, keys: &Keycodes) {
+        let mut step_direction = StepDirection::new();
+        for key in keys.iter() {
+            if self.front_key.contains(key) {
+                step_direction.front = true;
+            }
+            if self.back_key.contains(key) {
+                step_direction.front = true;
+            }
+            if self.left_key.contains(key) {
+                step_direction.front = true;
+            }
+            if self.right_key.contains(key) {
+                step_direction.front = true;
+            }
+        }
+    }
+}
+struct StepDirection {
+    front: bool,
+    back: bool,
+    left: bool,
+    right: bool,
+}
+impl StepDirection {
+    fn new() -> Self {
+        Self {
+            front: false,
+            back: false,
+            left: false,
+            right: false,
+        }
+    }
 }
 
+// Bullet
 struct Bullet {
     x: i32,
     y: i32,
@@ -92,14 +257,6 @@ impl Bullet {
     fn transfer(&mut self, x: i32, y: i32) {
         self.x += x;
         self.y += y;
-    }
-
-    fn fly(&mut self) {
-        if self.direction == Direction::Right {
-            self.transfer(self.speed, 0);
-        } else {
-            self.transfer(-self.speed, 0);
-        }
     }
 
     fn draw(
@@ -135,121 +292,18 @@ impl Bullet {
     }
 }
 
-pub fn shouting(
-    display: &mut Ssd1306<
-        I2CInterface<I2c>,
-        DisplaySize128x64,
-        BufferedGraphicsMode<DisplaySize128x64>,
-    >,
-    key_logger: &mut KeyLogger,
-) -> Result<
-    //Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>,
-    (),
-> {
-    let mut player1 = Player::new(10, 32);
-    let mut player2 = Player::new(128 - 10, 32);
-    let mut bullets: Vec<Bullet> = Vec::new();
-
-    loop {
-        display.clear(BinaryColor::Off).unwrap();
-
-        let keys = key_logger.get_unread_keys();
-        for key_conf in keys {
-            for key in key_conf.keyboard {
-                println!("{:?}", key);
-                match key.as_str() {
-                    "F" => player1.step(1, 0),
-                    "D" => player1.step(-1, 0),
-                    "C" => player1.step(0, 1),
-                    "R" => player1.step(0, -1),
-                    "J" => player2.step(-1, 0),
-                    "K" => player2.step(1, 0),
-                    "I" => player2.step(0, -1),
-                    "M" => player2.step(0, 1),
-                    "LMeta" => bullets.push(Bullet::new(player1.x, player1.y, Direction::Right)),
-                    "RMeta" => bullets.push(Bullet::new(player2.x, player2.y, Direction::Right)),
-                    _ => (),
-                }
-            }
+impl Object for Bullet {
+    fn tick(&mut self) {
+        if self.direction == Direction::Right {
+            self.transfer(self.speed, 0);
+        } else {
+            self.transfer(-self.speed, 0);
         }
-
-        player1.draw(display);
-        player2.draw(display);
-        for bullet in bullets.iter_mut() {
-            bullet.fly();
-            bullet.draw(display);
-        }
-
-        display.flush().unwrap();
-        thread::sleep(Duration::from_millis(10));
     }
 }
 
-pub fn progress(
-    display: &mut Ssd1306<
-        I2CInterface<I2c>,
-        DisplaySize128x64,
-        BufferedGraphicsMode<DisplaySize128x64>,
-    >,
-) -> Result<
-    //Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>,
-    (),
-> {
-    // The current progress percentage
-
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_6X10)
-        .text_color(BinaryColor::On)
-        .build();
-
-    Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
-        .draw(display)
-        .unwrap();
-
-    Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
-        .draw(display)
-        .unwrap();
-
-    display.flush().unwrap();
-
-    let arc_stroke = PrimitiveStyleBuilder::new()
-        .stroke_color(BinaryColor::On)
-        .stroke_width(5)
-        .stroke_alignment(StrokeAlignment::Inside)
-        .build();
-    let character_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
-    let text_style = TextStyleBuilder::new()
-        .baseline(Baseline::Middle)
-        .alignment(Alignment::Center)
-        .build();
-
-    // The current progress percentage
-    let mut progress = 78;
-
-    for progress in 0..=100 {
-        display.clear(BinaryColor::Off).unwrap();
-        let sweep = progress as f32 * 360.0 / 100.0;
-
-        // Draw an arc with a 5px wide stroke.
-        Arc::new(Point::new(2 + 32, 2), 64 - 4, 90.0.deg(), sweep.deg())
-            .into_styled(arc_stroke)
-            .draw(display)
-            .unwrap();
-
-        // Draw centered text.
-        let text = format!("{}%", progress);
-        Text::with_text_style(
-            &text,
-            display.bounding_box().center(),
-            character_style,
-            text_style,
-        )
-        .draw(display)
-        .unwrap();
-
-        display.flush().unwrap();
-
-        thread::sleep(Duration::from_millis(10));
-    }
-    Ok(())
+#[derive(PartialEq)]
+enum Direction {
+    Left,
+    Right,
 }
