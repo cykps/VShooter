@@ -1,14 +1,24 @@
+mod button;
+mod input_interface;
 mod key_logger;
 mod mode;
+mod object;
 mod progress_ring;
 
-use anyhow::Result;
-use key_logger::KeyLogger;
-use rppal::i2c::I2c;
+use button::Buttons;
+use rppal::{gpio::Gpio, i2c::I2c};
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 use std::{thread::sleep, time::Duration};
 
-fn main() -> Result<(), std::convert::Infallible> {
+const BUTTON1_PIN: u8 = 16;
+const BUTTON2_PIN: u8 = 26;
+
+fn main() {
+    // Initialize Button
+    let gpio = Gpio::new().unwrap();
+    let button1 = gpio.get(BUTTON1_PIN).unwrap().into_input_pullup();
+    let button2 = gpio.get(BUTTON2_PIN).unwrap().into_input_pullup();
+    let buttons = Buttons::new(button1, button2);
     // Initialize Display
     let i2c = I2c::new().unwrap();
     let interface = I2CDisplayInterface::new(i2c);
@@ -16,17 +26,11 @@ fn main() -> Result<(), std::convert::Infallible> {
         .into_buffered_graphics_mode();
     display.init().unwrap();
 
-    // Key Input
-    let mut key_logger = KeyLogger::new();
-
+    // Mode: Progress Ring
     progress_ring::run(&mut display).unwrap();
 
     sleep(Duration::from_millis(500));
 
-    mode::shouting(&mut display, &mut key_logger).unwrap();
-
-    loop {
-        sleep(Duration::from_millis(10));
-        println!("{:?}", key_logger.get());
-    }
+    // Mode: Shouting
+    mode::shooting(&mut display, &buttons).unwrap();
 }
