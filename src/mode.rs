@@ -29,8 +29,8 @@ const TICK_SIZE: Duration = Duration::from_millis(10);
 // Shouting Mode
 pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
     let mut objects: Objects = Vec::new();
-    let mut mono_point: i8 = 128;
-    let mut di_point: i8 = 128;
+    let mut mono_point: i16 = 128;
+    let mut di_point: i16 = 128;
 
     let player1 = Player::new(
         10,
@@ -78,21 +78,24 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
                 Team::Di => di.push(obj),
             }
         }
-        for m in &*mono {
-            for d in &*di {
-                let m_pos = m.get_hitbox_position();
-                let d_pos = d.get_hitbox_position();
+        for m in mono.iter_mut() {
+            for d in di.iter_mut() {
+                let m_ref = &mut **m;
+                let d_ref = &mut **d;
+
+                let m_pos = m_ref.get_hitbox_position();
+                let d_pos = d_ref.get_hitbox_position();
                 if (m_pos.x - d_pos.x).abs() + (m_pos.y - d_pos.y).abs() == 0 {
-                    match (&m, &d) {
-                        (&&&mut ObjectEnum::Bullet(&m_row), &&&mut ObjectEnum::Bullet(&d_row)) => {
-                            (m_row).move_to(-100, -100);
-                            (d_row).move_to(-200, -200);
+                    match (m_ref, d_ref) {
+                        (ObjectEnum::Bullet(ref mut m), ObjectEnum::Bullet(ref mut d)) => {
+                            (m).move_to(-100, -100);
+                            (d).move_to(-200, -200);
                         }
-                        (ObjectEnum::Player(_), ObjectEnum::Bullet(d)) => {
+                        (ObjectEnum::Player(_), ObjectEnum::Bullet(ref mut d)) => {
                             mono_point -= 4;
                             d.move_to(-200, -200);
                         }
-                        (ObjectEnum::Bullet(m), ObjectEnum::Player(_)) => {
+                        (ObjectEnum::Bullet(ref mut m), ObjectEnum::Player(_)) => {
                             m.move_to(-100, -100);
                             di_point -= 4;
                         }
