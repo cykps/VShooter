@@ -7,8 +7,6 @@ use embedded_graphics::{
 };
 use rppal::gpio::Level;
 
-pub type Objects = Vec<ObjectEnum>;
-
 // Traits for Objects
 pub trait Object {
     fn tick(&mut self, inputs: &Inputs) -> Objects {
@@ -17,16 +15,20 @@ pub trait Object {
 }
 
 pub trait DrawableObj {
-    fn draw(&mut self, display: &mut Display) {}
+    fn draw(&mut self, display: &mut Display);
 }
 
-trait Movable {
-    fn move_to(&mut self, x: i32, y: i32) {}
-    fn move_by(&mut self, dx: i32, dy: i32) {}
+pub trait Movable {
+    fn move_to(&mut self, x: i32, y: i32);
+    fn move_by(&mut self, dx: i32, dy: i32);
 }
 
 trait MovableRelative {
-    fn move_relative(&mut self, forward: i32, left: i32) {}
+    fn move_relative(&mut self, forward: i32, left: i32);
+}
+
+pub trait Hittable {
+    fn get_hitbox_position(&self) -> Position;
 }
 
 #[derive(Debug)]
@@ -47,10 +49,43 @@ impl RelativeDirections {
     }
 }
 
+#[derive(Debug)]
+pub struct Position {
+    pub x: i32,
+    pub y: i32,
+}
+impl Position {
+    fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
+    }
+}
+
+// Objects type
+pub type Objects = Vec<ObjectEnum>;
+#[derive(Copy, Clone, PartialEq)]
+pub enum Team {
+    Mono,
+    Di,
+}
+
 // Object enum
 pub enum ObjectEnum {
     Player(Player),
     Bullet(Bullet),
+}
+impl ObjectEnum {
+    pub fn is_hittable(&self) -> bool {
+        match self {
+            Self::Player(_) | Self::Bullet(_) => true,
+            _ => false,
+        }
+    }
+    pub fn get_team(&self) -> Team {
+        match self {
+            Self::Player(o) => o.team,
+            Self::Bullet(o) => o.team,
+        }
+    }
 }
 impl Object for ObjectEnum {
     fn tick(&mut self, inputs: &Inputs) -> Objects {
@@ -65,6 +100,14 @@ impl DrawableObj for ObjectEnum {
         match self {
             Self::Player(o) => o.draw(display),
             Self::Bullet(o) => o.draw(display),
+        }
+    }
+}
+impl Hittable for ObjectEnum {
+    fn get_hitbox_position(&self) -> Position {
+        match self {
+            Self::Player(o) => o.get_hitbox_position(),
+            Self::Bullet(o) => o.get_hitbox_position(),
         }
     }
 }
@@ -91,6 +134,7 @@ pub struct Player {
     x: i32,
     y: i32,
     direction: AbsoluteDirection,
+    team: Team,
     forward_keys: Keycodes,
     backward_keys: Keycodes,
     left_keys: Keycodes,
@@ -103,6 +147,7 @@ impl Player {
         x: i32,
         y: i32,
         direction: AbsoluteDirection,
+        team: Team,
         forward_keys: Keycodes,
         backward_keys: Keycodes,
         left_keys: Keycodes,
@@ -113,6 +158,7 @@ impl Player {
         Self {
             x,
             y,
+            team,
             direction,
             forward_keys,
             backward_keys,
@@ -161,6 +207,7 @@ impl Object for Player {
                 self.x,
                 self.y,
                 self.direction,
+                self.team,
             ))]
         } else {
             Vec::new()
@@ -199,22 +246,29 @@ impl MovableRelative for Player {
         self.move_by(dx, dy);
     }
 }
+impl Hittable for Player {
+    fn get_hitbox_position(&self) -> Position {
+        Position::new(self.x, self.y)
+    }
+}
 
 // Bullet struct
 pub struct Bullet {
     x: i32,
     y: i32,
-    speed: i32,
     direction: AbsoluteDirection,
+    team: Team,
+    speed: i32,
 }
 impl Bullet {
-    fn new(x: i32, y: i32, direction: AbsoluteDirection) -> Self {
+    fn new(x: i32, y: i32, direction: AbsoluteDirection, team: Team) -> Self {
         let speed = 1;
         Self {
             x,
             y,
-            speed,
             direction,
+            team,
+            speed,
         }
     }
 
@@ -286,5 +340,19 @@ impl Object for Bullet {
         }
 
         Vec::new()
+    }
+}
+impl Hittable for Bullet {
+    fn get_hitbox_position(&self) -> Position {
+        Position::new(self.x, self.y)
+    }
+}
+impl Movable for Bullet {
+    fn move_to(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+    fn move_by(&mut self, dx: i32, dy: i32) {
+        self.move_to(self.x + dx, self.y + dy);
     }
 }
