@@ -5,15 +5,18 @@ use embedded_graphics::{
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle, Triangle},
 };
+use rppal::gpio::Level;
 
 pub type Objects = Vec<ObjectEnum>;
 
 // Traits for Objects
-trait Object {
-    fn tick(&mut self, inputs: &Inputs) {}
+pub trait Object {
+    fn tick(&mut self, inputs: &Inputs) -> Objects {
+        Vec::new()
+    }
 }
 
-trait DrawableObj {
+pub trait DrawableObj {
     fn draw(&mut self, display: &mut Display) {}
 }
 
@@ -50,7 +53,7 @@ pub enum ObjectEnum {
     Bullet(Bullet),
 }
 impl Object for ObjectEnum {
-    fn tick(&mut self, inputs: &Inputs) {
+    fn tick(&mut self, inputs: &Inputs) -> Objects {
         match self {
             Self::Player(o) => o.tick(inputs),
             Self::Bullet(o) => o.tick(inputs),
@@ -75,7 +78,7 @@ pub enum RelativeDirection {
     Right,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AbsoluteDirection {
     XPlus,
     XMinus,
@@ -92,6 +95,7 @@ pub struct Player {
     backward_keys: Keycodes,
     left_keys: Keycodes,
     right_keys: Keycodes,
+    shoot_button_idx: usize,
     speed: i32,
 }
 impl Player {
@@ -103,6 +107,7 @@ impl Player {
         backward_keys: Keycodes,
         left_keys: Keycodes,
         right_keys: Keycodes,
+        shoot_button_idx: usize,
     ) -> Self {
         let speed = 1;
         Self {
@@ -113,6 +118,7 @@ impl Player {
             backward_keys,
             left_keys,
             right_keys,
+            shoot_button_idx,
             speed,
         }
     }
@@ -123,7 +129,7 @@ impl Player {
     }
 }
 impl Object for Player {
-    fn tick(&mut self, inputs: &Inputs) {
+    fn tick(&mut self, inputs: &Inputs) -> Objects {
         let mut directions = RelativeDirections::new();
         for key in inputs.keycodes.iter() {
             if self.forward_keys.contains(&key) {
@@ -150,6 +156,15 @@ impl Object for Player {
             _ => 0,
         };
         self.move_relative(forward, left);
+        if inputs.button_levels[self.shoot_button_idx] == Level::Low {
+            vec![ObjectEnum::Bullet(Bullet::new(
+                self.x,
+                self.y,
+                self.direction,
+            ))]
+        } else {
+            Vec::new()
+        }
     }
 }
 impl DrawableObj for Player {
@@ -257,7 +272,7 @@ impl Bullet {
     }
 }
 impl Object for Bullet {
-    fn tick(&mut self, inputs: &Inputs) {
+    fn tick(&mut self, inputs: &Inputs) -> Objects {
         match self.direction {
             AbsoluteDirection::XPlus => self.transfer(self.speed, 0),
             AbsoluteDirection::XMinus => self.transfer(-self.speed, 0),
@@ -269,5 +284,7 @@ impl Object for Bullet {
         } else if self.direction == AbsoluteDirection::XMinus {
             self.transfer(-self.speed, 0);
         }
+
+        Vec::new()
     }
 }

@@ -4,6 +4,7 @@ use crate::key_logger::get_keycodes;
 use crate::object::{
     AbsoluteDirection, ObjectEnum, Objects, Player, RelativeDirection, RelativeDirections,
 };
+use crate::object::{DrawableObj, Object};
 use anyhow::Result;
 use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
@@ -35,6 +36,7 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
         vec![Keycode::D],
         vec![Keycode::R],
         vec![Keycode::C],
+        0,
     );
     let player2 = Player::new(
         128 - 10,
@@ -44,6 +46,7 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
         vec![Keycode::K],
         vec![Keycode::M],
         vec![Keycode::I],
+        1,
     );
     objects.push(ObjectEnum::Player(player1));
     objects.push(ObjectEnum::Player(player2));
@@ -54,9 +57,11 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
         let keycodes = get_keycodes();
         let button_levels = buttons.get_levels();
         let inputs = Inputs::new(keycodes, button_levels);
+        let mut added_objects: Objects = Vec::new();
         for object in &mut objects {
-            object.tick(inputs);
+            added_objects.append(&mut object.tick(&inputs));
         }
+        objects.append(&mut added_objects);
 
         // Draw on Display
         display.clear(BinaryColor::Off).unwrap();
