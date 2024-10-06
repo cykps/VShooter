@@ -77,7 +77,7 @@ pub fn run(
 
         display.flush().unwrap();
 
-        thread::sleep(Duration::from_millis(2));
+        thread::sleep(Duration::from_micros(1));
     }
     Ok(())
 }

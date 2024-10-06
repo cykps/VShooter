@@ -5,7 +5,10 @@ use embedded_graphics::{
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle, Triangle},
 };
+use rand::Rng;
 use rppal::gpio::Level;
+
+const SHOOT_INTERVAL: u128 = 1000;
 
 // Traits for Objects
 pub trait Object {
@@ -141,6 +144,7 @@ pub struct Player {
     right_keys: Keycodes,
     shoot_button_idx: usize,
     speed: i32,
+    interval: u8,
 }
 impl Player {
     pub fn new(
@@ -166,6 +170,7 @@ impl Player {
             right_keys,
             shoot_button_idx,
             speed,
+            interval: 0,
         }
     }
 
@@ -202,10 +207,16 @@ impl Object for Player {
             _ => 0,
         };
         self.move_relative(forward, left);
-        if inputs.button_levels[self.shoot_button_idx] == Level::Low {
+        if self.interval != 0 {
+            self.interval -= 1;
+        }
+        if self.interval == 0 {
+            // && inputs.button_levels[self.shoot_button_idx] == Level::Low
+            self.interval = (SHOOT_INTERVAL / (inputs.tick / 2 + 100)) as u8;
+            let mut rng = rand::thread_rng();
             vec![ObjectEnum::Bullet(Bullet::new(
                 self.x,
-                self.y,
+                rng.gen_range(0..=64),
                 self.direction,
                 self.team,
             ))]
@@ -232,18 +243,29 @@ impl Movable for Player {
         self.y = y;
     }
     fn move_by(&mut self, dx: i32, dy: i32) {
-        self.move_to(self.x + dx, self.y + dy);
+        let new_pos = Position::new(self.x + dx, self.y + dy);
+        let new_dx = if !(0 <= new_pos.x && new_pos.x <= 128) {
+            0
+        } else {
+            dx
+        };
+        let new_dy = if !(0 <= new_pos.y && new_pos.y <= 64) {
+            0
+        } else {
+            dy
+        };
+        self.move_to(self.x + new_dx, self.y + new_dy);
     }
 }
 impl MovableRelative for Player {
     fn move_relative(&mut self, forward: i32, left: i32) {
         let (dx, dy) = match self.direction {
-            AbsoluteDirection::XPlus => (forward, -left),
-            AbsoluteDirection::XMinus => (-forward, left),
+            AbsoluteDirection::XPlus => (if self.x + forward < 50 { forward } else { 0 }, -left),
+            AbsoluteDirection::XMinus => (if self.x - forward > 78 { -forward } else { 0 }, left),
             AbsoluteDirection::YPlus => (left, -forward),
             AbsoluteDirection::YMinus => (-left, forward),
         };
-        self.move_by(dx, dy);
+        self.move_by(dx * 2, dy);
     }
 }
 impl Hittable for Player {

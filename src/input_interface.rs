@@ -9,12 +9,14 @@ pub type Display =
 pub struct Inputs {
     pub keycodes: Keycodes,
     pub button_levels: ButtonLevels,
+    pub tick: u128,
 }
 impl Inputs {
-    pub fn new(keycodes: Keycodes, button_levels: ButtonLevels) -> Self {
+    pub fn new(keycodes: Keycodes, button_levels: ButtonLevels, tick: u128) -> Self {
         Self {
             keycodes,
             button_levels,
+            tick,
         }
     }
 }

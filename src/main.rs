@@ -1,12 +1,13 @@
 mod button;
 mod input_interface;
 mod key_logger;
-mod mode;
 mod object;
 mod progress_ring;
+mod shooting;
 
 use button::Buttons;
 use rppal::{gpio::Gpio, i2c::I2c};
+use shooting::shooting;
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 use std::{thread::sleep, time::Duration};
 
@@ -26,11 +27,13 @@ fn main() {
         .into_buffered_graphics_mode();
     display.init().unwrap();
 
-    // Mode: Progress Ring
-    progress_ring::run(&mut display).unwrap();
+    loop {
+        // Mode: Progress Ring
+        progress_ring::run(&mut display).unwrap();
 
-    sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(500));
 
-    // Mode: Shouting
-    mode::shooting(&mut display, &buttons).unwrap();
+        // Mode: Shouting
+        shooting(&mut display, &buttons).unwrap();
+    }
 }
