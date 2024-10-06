@@ -20,12 +20,12 @@ pub trait DrawableObj {
     fn draw(&mut self, display: &mut Display) {}
 }
 
-trait Movble {
+trait Movable {
     fn move_to(&mut self, x: i32, y: i32) {}
     fn move_by(&mut self, dx: i32, dy: i32) {}
 }
 
-trait MovbleRelative {
+trait MovableRelative {
     fn move_relative(&mut self, forward: i32, left: i32) {}
 }
 
@@ -179,7 +179,7 @@ impl DrawableObj for Player {
             .unwrap();
     }
 }
-impl Movble for Player {
+impl Movable for Player {
     fn move_to(&mut self, x: i32, y: i32) {
         self.x = x;
         self.y = y;
@@ -188,7 +188,7 @@ impl Movble for Player {
         self.move_to(self.x + dx, self.y + dy);
     }
 }
-impl MovbleRelative for Player {
+impl MovableRelative for Player {
     fn move_relative(&mut self, forward: i32, left: i32) {
         let (dx, dy) = match self.direction {
             AbsoluteDirection::XPlus => (forward, -left),
