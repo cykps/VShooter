@@ -1,9 +1,29 @@
+use crate::constant::{BUTTON1_PIN, BUTTON2_PIN, LED1_PIN, LED2_PIN};
 use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
+use rppal::gpio::Gpio;
 use rppal::{
-    gpio::{InputPin, Level},
+    gpio::{InputPin, Level, OutputPin},
     i2c::I2c,
 };
 use ssd1306::{mode::BufferedGraphicsMode, prelude::*, Ssd1306};
+
+// Interfaces
+pub struct Interfaces {
+    pub display: Display,
+    pub buttons: Buttons,
+    pub leds: Leds,
+    pub keyboard: Keyboard,
+}
+impl Interfaces {
+    pub fn new(display: Display, buttons: Buttons, leds: Leds, keyboard: Keyboard) -> Self {
+        Self {
+            display,
+            buttons,
+            leds,
+            keyboard,
+        }
+    }
+}
 
 // Display
 pub type Display =
@@ -11,15 +31,30 @@ pub type Display =
 
 // Button
 pub struct Buttons {
-    pub button1: InputPin,
-    pub button2: InputPin,
+    button1: InputPin,
+    button2: InputPin,
 }
 impl Buttons {
-    pub fn new(button1: InputPin, button2: InputPin) -> Self {
+    pub fn new(gpio: &Gpio) -> Self {
+        let button1 = gpio.get(BUTTON1_PIN).unwrap().into_input_pullup();
+        let button2 = gpio.get(BUTTON2_PIN).unwrap().into_input_pullup();
         Self { button1, button2 }
     }
     pub fn get_levels(&self) -> ButtonLevels {
         ButtonLevels::new(self.button1.read(), self.button2.read())
+    }
+}
+
+// Button
+pub struct Leds {
+    pub led1: OutputPin,
+    pub led2: OutputPin,
+}
+impl Leds {
+    pub fn new(gpio: &Gpio) -> Self {
+        let led1 = gpio.get(LED1_PIN).unwrap().into_output();
+        let led2 = gpio.get(LED2_PIN).unwrap().into_output();
+        Self { led1, led2 }
     }
 }
 

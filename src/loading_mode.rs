@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::interface::Display;
 use embedded_graphics::mono_font::MonoTextStyleBuilder;
 use embedded_graphics::{
     mono_font::{
@@ -7,40 +7,12 @@ use embedded_graphics::{
     },
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Arc, PrimitiveStyleBuilder, Rectangle, StrokeAlignment, Triangle},
+    primitives::{Arc, PrimitiveStyleBuilder, StrokeAlignment},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
-use rppal::i2c::I2c;
-use ssd1306::{mode::BufferedGraphicsMode, prelude::*, Ssd1306};
 use std::{thread, time::Duration};
 
-pub fn run(
-    display: &mut Ssd1306<
-        I2CInterface<I2c>,
-        DisplaySize128x64,
-        BufferedGraphicsMode<DisplaySize128x64>,
-    >,
-) -> Result<
-    //Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>,
-    (),
-> {
-    // The current progress percentage
-
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_6X10)
-        .text_color(BinaryColor::On)
-        .build();
-
-    Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
-        .draw(display)
-        .unwrap();
-
-    Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
-        .draw(display)
-        .unwrap();
-
-    display.flush().unwrap();
-
+pub fn loading_ring(display: &mut Display) {
     let arc_stroke = PrimitiveStyleBuilder::new()
         .stroke_color(BinaryColor::On)
         .stroke_width(5)
@@ -51,8 +23,6 @@ pub fn run(
         .baseline(Baseline::Middle)
         .alignment(Alignment::Center)
         .build();
-
-    // The current progress percentage
 
     for progress in 0..=100 {
         display.clear(BinaryColor::Off).unwrap();
@@ -79,5 +49,4 @@ pub fn run(
 
         thread::sleep(Duration::from_micros(1));
     }
-    Ok(())
 }

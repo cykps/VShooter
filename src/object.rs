@@ -1,5 +1,6 @@
-use crate::interface::{ButtonStatus, Display, Keycodes};
+use crate::interface::{ButtonLevels, Display, Interfaces, Keycodes};
 use crate::shooting_mode::Tick;
+use device_query::Keycode;
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
@@ -10,18 +11,67 @@ use rppal::gpio::Level;
 
 const SHOOT_INTERVAL: u128 = 1000;
 
+pub struct StatusManager {
+    interfaces: Interfaces,
+    tick: u128,
+    mono: TeamProp,
+    di: TeamProp,
+}
+impl StatusManager {
+    pub fn new(interfaces: Interfaces) -> Self {
+        let tick = 0;
+        let mono = TeamProp::new();
+        let di = TeamProp::new();
+        Self {
+            interfaces,
+            tick,
+            mono,
+            di,
+        }
+    }
+    pub fn get_status(&mut self) -> Status {
+        Status::new(
+            &mut self.interfaces,
+            self.tick,
+            &mut self.mono,
+            &mut self.di,
+        )
+    }
+}
+
 pub struct Status {
     keycodes: Keycodes,
-    button_status: ButtonStatus,
+    button_levels: ButtonLevels,
     tick: Tick,
+    mono: &mut TeamProp,
+    di: &mut TeamProp,
 }
 impl Status {
-    pub fn new(keycodes: Keycodes, button_status: ButtonStatus, tick: Tick) -> Self {
+    pub fn new(
+        interfaces: &mut Interfaces,
+        tick: Tick,
+        mono: &mut TeamProp,
+        di: &mut TeamProp,
+    ) -> Self {
+        let keycodes = interfaces.keyboard.get_keycodes();
+        let button_levels = interfaces.buttons.get_levels();
         Self {
             keycodes,
-            button_status,
+            button_levels,
             tick,
+            mono,
+            di,
         }
+    }
+}
+
+pub struct TeamProp {
+    life: u8,
+}
+impl TeamProp {
+    pub fn new() -> Self {
+        let life = 0;
+        Self { life }
     }
 }
 
@@ -94,7 +144,7 @@ pub enum ObjectEnum {
 impl ObjectEnum {
     pub fn is_hittable(&self) -> bool {
         match self {
-            Self::Player(_) | Self::Bullet(_) => true,
+            Self::layer(_) | Self::Bullet(_) => true,
             _ => false,
         }
     }
@@ -148,6 +198,37 @@ pub enum AbsoluteDirection {
 }
 
 // Player struct
+pub struct Players {
+    player1: Player,
+    player2: Player,
+}
+impl Players {
+    pub fn new() -> Self {
+        let player1 = Player::new(
+            10,
+            32,
+            AbsoluteDirection::XPlus,
+            Team::Mono,
+            vec![Keycode::F],
+            vec![Keycode::D],
+            vec![Keycode::R],
+            vec![Keycode::C],
+            0,
+        );
+        let player2 = Player::new(
+            128 - 10,
+            32,
+            AbsoluteDirection::XMinus,
+            Team::Di,
+            vec![Keycode::J],
+            vec![Keycode::K],
+            vec![Keycode::M],
+            vec![Keycode::I],
+            1,
+        );
+        Self { player1, player2 }
+    }
+}
 pub struct Player {
     x: i32,
     y: i32,

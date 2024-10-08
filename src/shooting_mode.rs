@@ -1,9 +1,8 @@
-use crate::interface::{Buttons, Display, Keyboard};
+use crate::interface::{Buttons, Display, Interfaces, Keyboard};
 use crate::object::{
     AbsoluteDirection, Hittable, Movable, ObjectEnum, Objects, Player, Status, Team,
 };
 use crate::object::{DrawableObj, Object};
-use anyhow::Result;
 use device_query::keymap::Keycode;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
@@ -12,7 +11,6 @@ use embedded_graphics::{
     primitives::{Line, PrimitiveStyleBuilder},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
-use rppal::gpio::OutputPin;
 use std::{thread, time::Duration};
 
 pub type Tick = u128;
@@ -22,49 +20,22 @@ const DAMAGE: i16 = 4;
 const DEFAULT_POINT: i16 = 64;
 
 // Shouting Mode
-pub fn shooting(display: &mut Display, buttons: &Buttons, leds: &Vec<OutputPin>) -> Result<()> {
+pub fn shooting(interfaces: &mut Interfaces) {
     let mut objects: Objects = Vec::new();
     let mut mono_point: i16 = DEFAULT_POINT;
     let mut di_point: i16 = DEFAULT_POINT;
     let mut count_to_finish: Option<u16> = None;
     let mut winner: Option<Team> = None;
     let mut tick: Tick = 0;
-    let mono_text_style = TextStyleBuilder::new()
-        .baseline(Baseline::Top)
-        .alignment(Alignment::Left)
-        .build();
-    let di_text_style = TextStyleBuilder::new()
-        .baseline(Baseline::Top)
-        .alignment(Alignment::Right)
-        .build();
     let character_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
-    let line_stroke = PrimitiveStyleBuilder::new()
+    let text_style = TextStyleBuilder::new().baseline(Baseline::Top);
+    let mono_text_style = text_style.alignment(Alignment::Left).build();
+    let di_text_style = text_style.alignment(Alignment::Right).build();
+    let life_gauge_stroke = PrimitiveStyleBuilder::new()
         .stroke_color(BinaryColor::On)
         .stroke_width(1)
         .build();
 
-    let player1 = Player::new(
-        10,
-        32,
-        AbsoluteDirection::XPlus,
-        Team::Mono,
-        vec![Keycode::F],
-        vec![Keycode::D],
-        vec![Keycode::R],
-        vec![Keycode::C],
-        0,
-    );
-    let player2 = Player::new(
-        128 - 10,
-        32,
-        AbsoluteDirection::XMinus,
-        Team::Di,
-        vec![Keycode::J],
-        vec![Keycode::K],
-        vec![Keycode::M],
-        vec![Keycode::I],
-        1,
-    );
     objects.push(ObjectEnum::Player(player1));
     objects.push(ObjectEnum::Player(player2));
 
@@ -164,7 +135,7 @@ pub fn shooting(display: &mut Display, buttons: &Buttons, leds: &Vec<OutputPin>)
             match countdown {
                 Some(c) => {
                     if c == 0 {
-                        break Ok(());
+                        break;
                     } else {
                         countdown = Some(c - 1)
                     }
