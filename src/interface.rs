@@ -45,18 +45,21 @@ impl Buttons {
     }
 }
 
-// Button
+// Leds
 pub struct Leds {
     pub led1: OutputPin,
     pub led2: OutputPin,
 }
 impl Leds {
     pub fn new(gpio: &Gpio) -> Self {
-        let led1 = gpio.get(LED1_PIN).unwrap().into_output();
-        let led2 = gpio.get(LED2_PIN).unwrap().into_output();
+        let mut led1 = gpio.get(LED1_PIN).unwrap().into_output();
+        let mut led2 = gpio.get(LED2_PIN).unwrap().into_output();
+        led1.set_low();
+        led2.set_low();
         Self { led1, led2 }
     }
 }
+pub type Led = OutputPin;
 
 pub struct ButtonLevels {
     pub button1_level: Level,

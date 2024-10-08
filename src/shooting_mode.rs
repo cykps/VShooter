@@ -1,9 +1,9 @@
 use crate::constant::{
     BULLET_DAMEGE, DISPLAY_MARGIN, DISPLAY_SIZE_X, DISPLAY_SIZE_Y, HIT_DISTANCE, INITIAL_HITPOINT,
-    TICK_FOR_SHOWING_RESULT, TICK_SIZE,
+    RESULT_TICK_SIZE, SHOOT_INTERVAL, TICK_SIZE,
 };
 use crate::interface::{Buttons, Display, Interfaces, Keyboard};
-use crate::object::{Bullets, Players, Status, Team};
+use crate::object::{Bullets, Guns, Lasers, Players, Status, Team};
 use device_query::keymap::Keycode;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
@@ -12,7 +12,7 @@ use embedded_graphics::{
     primitives::{Line, PrimitiveStyleBuilder},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
-use std::{thread, time::Duration};
+use std::thread;
 
 pub type Tick = u128;
 
@@ -25,6 +25,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
     let mut mono_result_text: Option<&str> = None;
     let mut di_result_text: Option<&str> = None;
     let mut tick_for_exit: Option<i32> = None;
+    let mut shooting_interval: u8 = 0;
 
     let character_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
     let text_style = TextStyleBuilder::new().baseline(Baseline::Top);
@@ -36,19 +37,21 @@ pub fn shooting(interfaces: &mut Interfaces) {
         .build();
 
     let mut players = Players::new();
-    let mut bullets_mono = Vec::new();
-    let mut bullets_di = Vec::new();
+    let mut guns = Guns::new();
+    let mut lasers = Lasers::new();
+    let mut bullets_mono: Bullets = Vec::new();
+    let mut bullets_di: Bullets = Vec::new();
 
     // Main Loop
     loop {
         // Tick
         tick += 1;
-        let status = Status::new(interfaces, tick, mono_hitpoint, di_hitpoint);
+        let status = Status::new(interfaces, tick);
 
         // Process par tick
         // player
-        bullets_mono.append(&mut players.player1.tick(&status));
-        bullets_di.append(&mut players.player2.tick(&status));
+        players.player1.tick(&status);
+        players.player2.tick(&status);
         // bullets
         for bullet in &mut bullets_mono {
             bullet.tick();
@@ -57,21 +60,52 @@ pub fn shooting(interfaces: &mut Interfaces) {
             bullet.tick();
         }
 
+        // Get players position
+        let p1_pos = players.player1.get_position();
+        let p2_pos = players.player2.get_position();
+
+        // Shoot
+        if shooting_interval == 0 {
+            shooting_interval = (SHOOT_INTERVAL / (tick / 2 + 100)) as u8;
+            bullets_mono.push(guns.gun1.shoot(p1_pos.x));
+            bullets_di.push(guns.gun2.shoot(p2_pos.x));
+        } else {
+            shooting_interval -= 1;
+        }
+
+        // Laser
+        // laser1
+        if let Some(bullet) = lasers.laser1.try_emit(
+            &status,
+            &mut interfaces.leds.led1,
+            p2_pos.y,
+            status.button_levels.button1_level,
+        ) {
+            bullets_mono.push(bullet);
+        }
+        // laser2
+        if let Some(bullet) = lasers.laser2.try_emit(
+            &status,
+            &mut interfaces.leds.led2,
+            p1_pos.y,
+            status.button_levels.button2_level,
+        ) {
+            bullets_di.push(bullet);
+        }
+
         // Hit
         // player and bullet
         if winner.is_none() {
-            let p_pos = players.player1.get_position();
             for b in bullets_di.iter_mut() {
                 let b_pos = b.get_position();
-                if (p_pos.x - b_pos.x).abs() + (p_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                if (p1_pos.x - b_pos.x).abs() + (p1_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
                     mono_hitpoint -= BULLET_DAMEGE;
                     b.disable();
                 }
             }
-            let p_pos = players.player2.get_position();
             for b in bullets_mono.iter_mut() {
                 let b_pos = b.get_position();
-                if (p_pos.x - b_pos.x).abs() + (p_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                if (p2_pos.x - b_pos.x).abs() + (p2_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
                     di_hitpoint -= BULLET_DAMEGE;
                     b.disable();
                 }
@@ -142,15 +176,15 @@ pub fn shooting(interfaces: &mut Interfaces) {
 
         // Decide winner
         match (winner, mono_hitpoint, di_hitpoint) {
-            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && mono_hp > di_hp => {
+            (None, mono_hp, di_hp) if (mono_hp <= 0 || di_hp <= 0) && mono_hp > di_hp => {
                 (mono_result_text, di_result_text) = (Some("Win"), Some("Lose"));
                 winner = Some(Team::Mono);
             }
-            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && di_hp > mono_hp => {
+            (None, mono_hp, di_hp) if (mono_hp <= 0 || di_hp <= 0) && di_hp > mono_hp => {
                 (mono_result_text, di_result_text) = (Some("Lose"), Some("Win"));
                 winner = Some(Team::Di);
             }
-            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && mono_hp == di_hp => {
+            (None, mono_hp, di_hp) if (mono_hp <= 0 || di_hp <= 0) && mono_hp == di_hp => {
                 mono_hitpoint = BULLET_DAMEGE;
                 mono_hitpoint = BULLET_DAMEGE;
             }
@@ -190,7 +224,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
             }
             None => {
                 if winner.is_some() {
-                    tick_for_exit = Some(TICK_FOR_SHOWING_RESULT);
+                    tick_for_exit = Some(RESULT_TICK_SIZE);
                 }
             }
         }
@@ -198,4 +232,8 @@ pub fn shooting(interfaces: &mut Interfaces) {
         // Sleep
         thread::sleep(TICK_SIZE);
     }
+
+    // Finalize
+    interfaces.leds.led1.set_low();
+    interfaces.leds.led2.set_low();
 }

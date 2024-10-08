@@ -10,8 +10,8 @@ pub const LED2_PIN: u8 = 20;
 pub const TICK_SIZE: Duration = Duration::from_millis(4);
 
 // Hitpoint
-pub const INITIAL_HITPOINT: u8 = 64;
-pub const BULLET_DAMEGE: u8 = 4;
+pub const INITIAL_HITPOINT: i8 = 64;
+pub const BULLET_DAMEGE: i8 = 4;
 
 // Display
 pub const DISPLAY_SIZE_X: i32 = 128;
@@ -22,4 +22,11 @@ pub const HIT_DISTANCE: i32 = 1;
 pub const DISPLAY_MARGIN: i32 = 8;
 
 // Exit cool time
-pub const TICK_FOR_SHOWING_RESULT: i32 = 100;
+pub const RESULT_TICK_SIZE: i32 = 100;
+
+// Shoot
+pub const SHOOT_INTERVAL: u128 = 1000;
+
+// Laser
+pub const EMIT_TICK_SIZE: i32 = 20;
+pub const LASER_SPAWN_POSITION: i32 = 9;
