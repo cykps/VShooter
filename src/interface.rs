@@ -59,8 +59,8 @@ impl Leds {
 }
 
 pub struct ButtonLevels {
-    button1_level: Level,
-    button2_level: Level,
+    pub button1_level: Level,
+    pub button2_level: Level,
 }
 impl ButtonLevels {
     pub fn new(button1_level: Level, button2_level: Level) -> Self {

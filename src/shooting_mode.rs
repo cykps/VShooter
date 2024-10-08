@@ -1,8 +1,9 @@
-use crate::interface::{Buttons, Display, Interfaces, Keyboard};
-use crate::object::{
-    AbsoluteDirection, Hittable, Movable, ObjectEnum, Objects, Player, Status, Team,
+use crate::constant::{
+    BULLET_DAMEGE, DISPLAY_MARGIN, DISPLAY_SIZE_X, DISPLAY_SIZE_Y, HIT_DISTANCE, INITIAL_HITPOINT,
+    TICK_FOR_SHOWING_RESULT, TICK_SIZE,
 };
-use crate::object::{DrawableObj, Object};
+use crate::interface::{Buttons, Display, Interfaces, Keyboard};
+use crate::object::{Bullets, Players, Status, Team};
 use device_query::keymap::Keycode;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
@@ -14,137 +15,187 @@ use embedded_graphics::{
 use std::{thread, time::Duration};
 
 pub type Tick = u128;
-const TICK_SIZE: Duration = Duration::from_millis(4);
-const COUNTDOWN: u16 = 200;
-const DAMAGE: i16 = 4;
-const DEFAULT_POINT: i16 = 64;
 
 // Shouting Mode
 pub fn shooting(interfaces: &mut Interfaces) {
-    let mut objects: Objects = Vec::new();
-    let mut mono_point: i16 = DEFAULT_POINT;
-    let mut di_point: i16 = DEFAULT_POINT;
-    let mut count_to_finish: Option<u16> = None;
-    let mut winner: Option<Team> = None;
+    let mut mono_hitpoint = INITIAL_HITPOINT;
+    let mut di_hitpoint = INITIAL_HITPOINT;
     let mut tick: Tick = 0;
+    let mut winner: Option<Team> = None;
+    let mut mono_result_text: Option<&str> = None;
+    let mut di_result_text: Option<&str> = None;
+    let mut tick_for_exit: Option<i32> = None;
+
     let character_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
     let text_style = TextStyleBuilder::new().baseline(Baseline::Top);
     let mono_text_style = text_style.alignment(Alignment::Left).build();
     let di_text_style = text_style.alignment(Alignment::Right).build();
-    let life_gauge_stroke = PrimitiveStyleBuilder::new()
+    let hitpoint_bar_stroke = PrimitiveStyleBuilder::new()
         .stroke_color(BinaryColor::On)
         .stroke_width(1)
         .build();
 
-    objects.push(ObjectEnum::Player(player1));
-    objects.push(ObjectEnum::Player(player2));
+    let mut players = Players::new();
+    let mut bullets_mono = Vec::new();
+    let mut bullets_di = Vec::new();
 
     // Main Loop
     loop {
         // Tick
         tick += 1;
-        let status = Status::new();
-        let mut new_objects: Objects = Vec::new();
+        let status = Status::new(interfaces, tick, mono_hitpoint, di_hitpoint);
 
-        // Tick
-        for object in &mut objects {
-            new_objects.append(&mut object.tick(&status));
+        // Process par tick
+        // player
+        bullets_mono.append(&mut players.player1.tick(&status));
+        bullets_di.append(&mut players.player2.tick(&status));
+        // bullets
+        for bullet in &mut bullets_mono {
+            bullet.tick();
         }
-        objects.append(&mut new_objects);
+        for bullet in &mut bullets_di {
+            bullet.tick();
+        }
 
         // Hit
-        let hittable: Vec<&mut ObjectEnum> =
-            objects.iter_mut().filter(|x| x.is_hittable()).collect();
-        let mut mono: Vec<&mut ObjectEnum> = Vec::new();
-        let mut di: Vec<&mut ObjectEnum> = Vec::new();
-        for obj in hittable {
-            match obj.get_team() {
-                Team::Mono => mono.push(obj),
-                Team::Di => di.push(obj),
+        // player and bullet
+        if winner.is_none() {
+            let p_pos = players.player1.get_position();
+            for b in bullets_di.iter_mut() {
+                let b_pos = b.get_position();
+                if (p_pos.x - b_pos.x).abs() + (p_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                    mono_hitpoint -= BULLET_DAMEGE;
+                    b.disable();
+                }
             }
-        }
-        for m in mono.iter_mut() {
-            for d in di.iter_mut() {
-                let m_ref = &mut **m;
-                let d_ref = &mut **d;
-
-                let m_pos = m_ref.get_hitbox_position();
-                let d_pos = d_ref.get_hitbox_position();
-                if (m_pos.x - d_pos.x).abs() + (m_pos.y - d_pos.y).abs() <= 1 {
-                    match (m_ref, d_ref) {
-                        (ObjectEnum::Bullet(ref mut m), ObjectEnum::Bullet(ref mut d)) => {
-                            m.move_to(-100, -100);
-                            d.move_to(-200, -200);
+            let p_pos = players.player2.get_position();
+            for b in bullets_mono.iter_mut() {
+                let b_pos = b.get_position();
+                if (p_pos.x - b_pos.x).abs() + (p_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                    di_hitpoint -= BULLET_DAMEGE;
+                    b.disable();
+                }
+            }
+            // bullet and bullet
+            for m in bullets_mono.iter_mut() {
+                for d in bullets_di.iter_mut() {
+                    if m.active && d.active {
+                        let m_pos = m.get_position();
+                        let d_pos = d.get_position();
+                        if (m_pos.x - d_pos.x).abs() + (m_pos.y - d_pos.y).abs() <= HIT_DISTANCE {
+                            m.disable();
+                            d.disable();
                         }
-                        (ObjectEnum::Player(_), ObjectEnum::Bullet(ref mut d)) => {
-                            mono_point -= DAMAGE;
-                            d.move_to(-200, -200);
-                        }
-                        (ObjectEnum::Bullet(ref mut m), ObjectEnum::Player(_)) => {
-                            m.move_to(-100, -100);
-                            di_point -= DAMAGE;
-                        }
-                        (ObjectEnum::Player(_), ObjectEnum::Player(_)) => (),
                     }
                 }
             }
         }
 
-        objects.retain(|o| match o {
-            ObjectEnum::Bullet(o) => {
-                let pos = o.get_hitbox_position();
-                (-10 < pos.x && pos.x < 138) && (-10 < pos.y && pos.y < 74)
+        // Remove bullets at outside of display
+        bullets_mono.retain(|b| {
+            b.active || {
+                let pos = b.get_position();
+                (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
+                    && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
             }
-            ObjectEnum::Player(_) => true,
+        });
+        bullets_di.retain(|b| {
+            b.active || {
+                let pos = b.get_position();
+                (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
+                    && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
+            }
         });
 
-        // Draw on Display
-        display.clear(BinaryColor::Off).unwrap();
-        for object in &mut objects {
-            object.draw(display);
-        }
-        // Draw Point Bar
-        Line::new(Point::new(0, 0), Point::new(mono_point.into(), 0))
-            .into_styled(line_stroke)
-            .draw(display)
-            .unwrap();
-        Line::new(Point::new((128 - di_point).into(), 0), Point::new(128, 0))
-            .into_styled(line_stroke)
-            .draw(display)
-            .unwrap();
+        // Draw on display
+        // clear display
+        interfaces.display.clear(BinaryColor::Off).unwrap();
 
-        if mono_point <= 0 || di_point <= 0 {
-            if mono_win.is_none() {
-                mono_win = Some(di_point <= 0);
+        // draw players
+        players.player1.draw(&mut interfaces.display);
+        players.player2.draw(&mut interfaces.display);
+
+        // draw bullets
+        for bullet in &mut bullets_mono {
+            if bullet.active {
+                bullet.draw(&mut interfaces.display);
             }
+        }
+        for bullet in &mut bullets_di {
+            if bullet.active {
+                bullet.draw(&mut interfaces.display);
+            }
+        }
 
-            let mono_text: &str;
-            let di_text: &str;
-            (mono_text, di_text) = if mono_win.unwrap() {
-                ("Win", "Lose")
-            } else {
-                ("Lose", "Win")
-            };
-            Text::with_text_style(mono_text, Point::zero(), character_style, mono_text_style)
-                .draw(display)
-                .unwrap();
-            Text::with_text_style(di_text, Point::new(128, 0), character_style, di_text_style)
-                .draw(display)
-                .unwrap();
+        // Draw hitpoint bar
+        Line::new(Point::new(0, 0), Point::new(mono_hitpoint.into(), 0))
+            .into_styled(hitpoint_bar_stroke)
+            .draw(&mut interfaces.display)
+            .unwrap();
+        Line::new(
+            Point::new(DISPLAY_SIZE_X - (di_hitpoint as i32), 0),
+            Point::new(DISPLAY_SIZE_X, 0),
+        )
+        .into_styled(hitpoint_bar_stroke)
+        .draw(&mut interfaces.display)
+        .unwrap();
 
-            match countdown {
-                Some(c) => {
-                    if c == 0 {
-                        break;
-                    } else {
-                        countdown = Some(c - 1)
-                    }
+        // Decide winner
+        match (winner, mono_hitpoint, di_hitpoint) {
+            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && mono_hp > di_hp => {
+                (mono_result_text, di_result_text) = (Some("Win"), Some("Lose"));
+                winner = Some(Team::Mono);
+            }
+            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && di_hp > mono_hp => {
+                (mono_result_text, di_result_text) = (Some("Lose"), Some("Win"));
+                winner = Some(Team::Di);
+            }
+            (None, mono_hp, di_hp) if (mono_hp == 0 || di_hp == 0) && mono_hp == di_hp => {
+                mono_hitpoint = BULLET_DAMEGE;
+                mono_hitpoint = BULLET_DAMEGE;
+            }
+            _ => (),
+        }
+
+        // Draw result
+        if winner.is_some() {
+            Text::with_text_style(
+                mono_result_text.unwrap(),
+                Point::zero(),
+                character_style,
+                mono_text_style,
+            )
+            .draw(&mut interfaces.display)
+            .unwrap();
+            Text::with_text_style(
+                di_result_text.unwrap(),
+                Point::new(DISPLAY_SIZE_X, 0),
+                character_style,
+                di_text_style,
+            )
+            .draw(&mut interfaces.display)
+            .unwrap();
+        }
+
+        // Flush display
+        interfaces.display.flush().unwrap();
+
+        // Exit
+        match tick_for_exit {
+            Some(0) => {
+                break;
+            }
+            Some(t) => {
+                tick_for_exit = Some(t - 1);
+            }
+            None => {
+                if winner.is_some() {
+                    tick_for_exit = Some(TICK_FOR_SHOWING_RESULT);
                 }
-                None => countdown = Some(COUNTDOWN),
             }
         }
-        display.flush().unwrap();
 
+        // Sleep
         thread::sleep(TICK_SIZE);
     }
 }
