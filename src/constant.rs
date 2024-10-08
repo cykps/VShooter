@@ -19,7 +19,7 @@ pub const DISPLAY_SIZE_Y: i32 = 64;
 
 // Hit
 pub const HIT_DISTANCE: i32 = 1;
-pub const DISPLAY_MARGIN: i32 = 8;
+pub const DISPLAY_MARGIN: i32 = 10;
 
 // Exit cool time
 pub const RESULT_TICK_SIZE: i32 = 100;

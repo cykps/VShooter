@@ -51,10 +51,14 @@ pub fn shooting(interfaces: &mut Interfaces) {
         players.player2.tick(&status);
         // bullets
         for bullet in &mut bullets_mono {
-            bullet.tick();
+            if bullet.active {
+                bullet.tick();
+            }
         }
         for bullet in &mut bullets_di {
-            bullet.tick();
+            if bullet.active {
+                bullet.tick();
+            }
         }
 
         // Get players position
@@ -92,17 +96,21 @@ pub fn shooting(interfaces: &mut Interfaces) {
             // Hit
             // player and bullet
             for b in bullets_di.iter_mut() {
-                let b_pos = b.get_position();
-                if (p1_pos.x - b_pos.x).abs() + (p1_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
-                    mono_hitpoint -= BULLET_DAMEGE;
-                    b.disable();
+                if b.active {
+                    let b_pos = b.get_position();
+                    if (p1_pos.x - b_pos.x).abs() + (p1_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                        mono_hitpoint -= BULLET_DAMEGE;
+                        b.disable();
+                    }
                 }
             }
             for b in bullets_mono.iter_mut() {
-                let b_pos = b.get_position();
-                if (p2_pos.x - b_pos.x).abs() + (p2_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
-                    di_hitpoint -= BULLET_DAMEGE;
-                    b.disable();
+                if b.active {
+                    let b_pos = b.get_position();
+                    if (p2_pos.x - b_pos.x).abs() + (p2_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
+                        di_hitpoint -= BULLET_DAMEGE;
+                        b.disable();
+                    }
                 }
             }
             // bullet and bullet
@@ -122,14 +130,14 @@ pub fn shooting(interfaces: &mut Interfaces) {
 
         // Remove bullets in outside of display
         bullets_mono.retain(|b| {
-            b.active || {
+            b.active && {
                 let pos = b.get_position();
                 (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
                     && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
             }
         });
         bullets_di.retain(|b| {
-            b.active || {
+            b.active && {
                 let pos = b.get_position();
                 (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
                     && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
