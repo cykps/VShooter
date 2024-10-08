@@ -1,42 +1,34 @@
-use crate::button::Buttons;
-use crate::input_interface::{Display, Inputs};
-use crate::key_logger::get_keycodes;
+use crate::interface::{Buttons, Display, Keyboard};
 use crate::object::{
-    AbsoluteDirection, Hittable, Movable, ObjectEnum, Objects, Player, RelativeDirection,
-    RelativeDirections, Team,
+    AbsoluteDirection, Hittable, Movable, ObjectEnum, Objects, Player, Status, Team,
 };
 use crate::object::{DrawableObj, Object};
 use anyhow::Result;
-use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
-use embedded_graphics::mono_font::MonoTextStyleBuilder;
+use device_query::keymap::Keycode;
 use embedded_graphics::{
-    mono_font::{
-        ascii::{FONT_10X20, FONT_6X10},
-        MonoTextStyle,
-    },
+    mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
-    primitives::{Arc, Line, PrimitiveStyleBuilder, Rectangle, StrokeAlignment, Triangle},
+    primitives::{Line, PrimitiveStyleBuilder},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
-    transform::Transform,
 };
-use itertools::Itertools;
-use rppal::gpio::{InputPin, Pin};
-use rppal::i2c::I2c;
+use rppal::gpio::OutputPin;
 use std::{thread, time::Duration};
 
+pub type Tick = u128;
 const TICK_SIZE: Duration = Duration::from_millis(4);
 const COUNTDOWN: u16 = 200;
 const DAMAGE: i16 = 4;
+const DEFAULT_POINT: i16 = 64;
 
 // Shouting Mode
-pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
+pub fn shooting(display: &mut Display, buttons: &Buttons, leds: &Vec<OutputPin>) -> Result<()> {
     let mut objects: Objects = Vec::new();
-    let mut mono_point: i16 = 64;
-    let mut di_point: i16 = 64;
-    let mut countdown: Option<u16> = None;
-    let mut mono_win: Option<bool> = None;
-    let mut tick: u128 = 0;
+    let mut mono_point: i16 = DEFAULT_POINT;
+    let mut di_point: i16 = DEFAULT_POINT;
+    let mut count_to_finish: Option<u16> = None;
+    let mut winner: Option<Team> = None;
+    let mut tick: Tick = 0;
     let mono_text_style = TextStyleBuilder::new()
         .baseline(Baseline::Top)
         .alignment(Alignment::Left)
@@ -80,12 +72,14 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
     loop {
         // Tick
         tick += 1;
-        let inputs = Inputs::new(get_keycodes(), buttons.get_levels(), tick);
-        let mut add_objects: Objects = Vec::new();
+        let status = Status::new();
+        let mut new_objects: Objects = Vec::new();
+
+        // Tick
         for object in &mut objects {
-            add_objects.append(&mut object.tick(&inputs));
+            new_objects.append(&mut object.tick(&status));
         }
-        objects.append(&mut add_objects);
+        objects.append(&mut new_objects);
 
         // Hit
         let hittable: Vec<&mut ObjectEnum> =
@@ -125,23 +119,13 @@ pub fn shooting(display: &mut Display, buttons: &Buttons) -> Result<()> {
             }
         }
 
-        //for object in objects {
-        //    let pos = object.get_hitbox_position();
-        //    if !(-10 < pos.x < 138) || !(-10 < pos.y < 74) {
-        //
-        //    }
-        //}
-
-        objects = objects
-            .into_iter()
-            .filter(|o| match o {
-                ObjectEnum::Bullet(o) => {
-                    let pos = o.get_hitbox_position();
-                    ((-10 < pos.x && pos.x < 138) && (-10 < pos.y && pos.y < 74))
-                }
-                ObjectEnum::Player(o) => true,
-            })
-            .collect();
+        objects.retain(|o| match o {
+            ObjectEnum::Bullet(o) => {
+                let pos = o.get_hitbox_position();
+                (-10 < pos.x && pos.x < 138) && (-10 < pos.y && pos.y < 74)
+            }
+            ObjectEnum::Player(_) => true,
+        });
 
         // Draw on Display
         display.clear(BinaryColor::Off).unwrap();

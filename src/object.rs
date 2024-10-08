@@ -1,5 +1,5 @@
-use crate::input_interface::{Display, Inputs};
-use crate::key_logger::Keycodes;
+use crate::interface::{ButtonStatus, Display, Keycodes};
+use crate::shooting_mode::Tick;
 use embedded_graphics::{
     pixelcolor::BinaryColor,
     prelude::*,
@@ -10,9 +10,24 @@ use rppal::gpio::Level;
 
 const SHOOT_INTERVAL: u128 = 1000;
 
+pub struct Status {
+    keycodes: Keycodes,
+    button_status: ButtonStatus,
+    tick: Tick,
+}
+impl Status {
+    pub fn new(keycodes: Keycodes, button_status: ButtonStatus, tick: Tick) -> Self {
+        Self {
+            keycodes,
+            button_status,
+            tick,
+        }
+    }
+}
+
 // Traits for Objects
 pub trait Object {
-    fn tick(&mut self, inputs: &Inputs) -> Objects {
+    fn tick(&mut self, _status: &Status) -> Objects {
         Vec::new()
     }
 }
@@ -91,10 +106,10 @@ impl ObjectEnum {
     }
 }
 impl Object for ObjectEnum {
-    fn tick(&mut self, inputs: &Inputs) -> Objects {
+    fn tick(&mut self, status: &Status) -> Objects {
         match self {
-            Self::Player(o) => o.tick(inputs),
-            Self::Bullet(o) => o.tick(inputs),
+            Self::Player(o) => o.tick(status),
+            Self::Bullet(o) => o.tick(status),
         }
     }
 }
@@ -145,6 +160,8 @@ pub struct Player {
     shoot_button_idx: usize,
     speed: i32,
     interval: u8,
+    bom: bool,
+    bom_time: u8,
 }
 impl Player {
     pub fn new(
@@ -171,28 +188,25 @@ impl Player {
             shoot_button_idx,
             speed,
             interval: 0,
+            bom: false,
+            bom_time: 0,
         }
-    }
-
-    fn transfer(&mut self, x: i32, y: i32) {
-        self.x += x;
-        self.y += y;
     }
 }
 impl Object for Player {
-    fn tick(&mut self, inputs: &Inputs) -> Objects {
+    fn tick(&mut self, status: &Status) -> Objects {
         let mut directions = RelativeDirections::new();
-        for key in inputs.keycodes.iter() {
-            if self.forward_keys.contains(&key) {
+        for key in status.keycodes.iter() {
+            if self.forward_keys.contains(key) {
                 directions.forward = true;
             }
-            if self.backward_keys.contains(&key) {
+            if self.backward_keys.contains(key) {
                 directions.backward = true;
             }
-            if self.left_keys.contains(&key) {
+            if self.left_keys.contains(key) {
                 directions.left = true;
             }
-            if self.right_keys.contains(&key) {
+            if self.right_keys.contains(key) {
                 directions.right = true;
             }
         }
@@ -210,19 +224,52 @@ impl Object for Player {
         if self.interval != 0 {
             self.interval -= 1;
         }
+        let mut rng = rand::thread_rng();
+        let mut adds = Vec::new();
+        if rng.gen_range(0..200) == 0 {
+            self.bom = true;
+        }
+        if self.bom && status.button_levels[self.shoot_button_idx] == Level::Low {
+            self.bom_time = 30;
+        }
+        if self.bom_time > 0 {
+            self.bom = false;
+            self.bom_time -= 1;
+            adds.push(ObjectEnum::Bullet(Bullet::new(
+                {
+                    if self.direction == AbsoluteDirection::XPlus {
+                        128
+                    } else {
+                        0
+                    }
+                },
+                self.y,
+                {
+                    if self.direction == AbsoluteDirection::XPlus {
+                        AbsoluteDirection::XMinus
+                    } else {
+                        AbsoluteDirection::XPlus
+                    }
+                },
+                {
+                    if self.team == Team::Mono {
+                        Team::Di
+                    } else {
+                        Team::Mono
+                    }
+                },
+            )));
+        }
         if self.interval == 0 {
-            // && inputs.button_levels[self.shoot_button_idx] == Level::Low
             self.interval = (SHOOT_INTERVAL / (inputs.tick / 2 + 100)) as u8;
-            let mut rng = rand::thread_rng();
-            vec![ObjectEnum::Bullet(Bullet::new(
+            adds.push(ObjectEnum::Bullet(Bullet::new(
                 self.x,
                 rng.gen_range(0..=64),
                 self.direction,
                 self.team,
-            ))]
-        } else {
-            Vec::new()
+            )));
         }
+        adds
     }
 }
 impl DrawableObj for Player {
@@ -231,7 +278,7 @@ impl DrawableObj for Player {
             .fill_color(BinaryColor::On)
             .build();
 
-        Rectangle::new(Point::new(self.x - 2, self.y - 2), Size::new(5, 5))
+        Rectangle::new(Point::new(self.x - 3, self.y - 3), Size::new(7, 7))
             .into_styled(style)
             .draw(display)
             .unwrap();
