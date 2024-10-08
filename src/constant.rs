@@ -30,3 +30,4 @@ pub const SHOOT_INTERVAL: u128 = 1000;
 // Laser
 pub const EMIT_TICK_SIZE: i32 = 20;
 pub const LASER_SPAWN_POSITION: i32 = 9;
+pub const EMIT_PROBABILITY: i32 = 280;

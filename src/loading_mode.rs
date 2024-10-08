@@ -1,10 +1,6 @@
 use crate::interface::Display;
-use embedded_graphics::mono_font::MonoTextStyleBuilder;
 use embedded_graphics::{
-    mono_font::{
-        ascii::{FONT_10X20, FONT_6X10},
-        MonoTextStyle,
-    },
+    mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
     primitives::{Arc, PrimitiveStyleBuilder, StrokeAlignment},

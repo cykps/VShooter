@@ -2,9 +2,8 @@ use crate::constant::{
     BULLET_DAMEGE, DISPLAY_MARGIN, DISPLAY_SIZE_X, DISPLAY_SIZE_Y, HIT_DISTANCE, INITIAL_HITPOINT,
     RESULT_TICK_SIZE, SHOOT_INTERVAL, TICK_SIZE,
 };
-use crate::interface::{Buttons, Display, Interfaces, Keyboard};
+use crate::interface::Interfaces;
 use crate::object::{Bullets, Guns, Lasers, Players, Status, Team};
-use device_query::keymap::Keycode;
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     pixelcolor::BinaryColor,
@@ -14,13 +13,11 @@ use embedded_graphics::{
 };
 use std::thread;
 
-pub type Tick = u128;
-
 // Shouting Mode
 pub fn shooting(interfaces: &mut Interfaces) {
     let mut mono_hitpoint = INITIAL_HITPOINT;
     let mut di_hitpoint = INITIAL_HITPOINT;
-    let mut tick: Tick = 0;
+    let mut tick: u128 = 0;
     let mut winner: Option<Team> = None;
     let mut mono_result_text: Option<&str> = None;
     let mut di_result_text: Option<&str> = None;
@@ -46,7 +43,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
     loop {
         // Tick
         tick += 1;
-        let status = Status::new(interfaces, tick);
+        let status = Status::new(interfaces);
 
         // Process par tick
         // player
@@ -73,29 +70,27 @@ pub fn shooting(interfaces: &mut Interfaces) {
             shooting_interval -= 1;
         }
 
-        // Laser
-        // laser1
-        if let Some(bullet) = lasers.laser1.try_emit(
-            &status,
-            &mut interfaces.leds.led1,
-            p2_pos.y,
-            status.button_levels.button1_level,
-        ) {
-            bullets_mono.push(bullet);
-        }
-        // laser2
-        if let Some(bullet) = lasers.laser2.try_emit(
-            &status,
-            &mut interfaces.leds.led2,
-            p1_pos.y,
-            status.button_levels.button2_level,
-        ) {
-            bullets_di.push(bullet);
-        }
-
-        // Hit
-        // player and bullet
         if winner.is_none() {
+            // Laser
+            // laser1
+            if let Some(bullet) = lasers.laser1.try_emit(
+                &mut interfaces.leds.led1,
+                p2_pos.y,
+                status.button_levels.button1_level,
+            ) {
+                bullets_mono.push(bullet);
+            }
+            // laser2
+            if let Some(bullet) = lasers.laser2.try_emit(
+                &mut interfaces.leds.led2,
+                p1_pos.y,
+                status.button_levels.button2_level,
+            ) {
+                bullets_di.push(bullet);
+            }
+
+            // Hit
+            // player and bullet
             for b in bullets_di.iter_mut() {
                 let b_pos = b.get_position();
                 if (p1_pos.x - b_pos.x).abs() + (p1_pos.y - b_pos.y).abs() <= HIT_DISTANCE {
@@ -125,7 +120,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
             }
         }
 
-        // Remove bullets at outside of display
+        // Remove bullets in outside of display
         bullets_mono.retain(|b| {
             b.active || {
                 let pos = b.get_position();
@@ -186,7 +181,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
             }
             (None, mono_hp, di_hp) if (mono_hp <= 0 || di_hp <= 0) && mono_hp == di_hp => {
                 mono_hitpoint = BULLET_DAMEGE;
-                mono_hitpoint = BULLET_DAMEGE;
+                di_hitpoint = BULLET_DAMEGE;
             }
             _ => (),
         }

@@ -1,6 +1,5 @@
-use crate::constant::{DISPLAY_SIZE_X, EMIT_TICK_SIZE, LASER_SPAWN_POSITION};
+use crate::constant::{DISPLAY_SIZE_X, EMIT_PROBABILITY, EMIT_TICK_SIZE, LASER_SPAWN_POSITION};
 use crate::interface::{ButtonLevels, Display, Interfaces, Keycodes, Led};
-use crate::shooting_mode::Tick;
 use device_query::Keycode;
 use embedded_graphics::{
     pixelcolor::BinaryColor,
@@ -14,16 +13,14 @@ use rppal::gpio::Level::*;
 pub struct Status {
     keycodes: Keycodes,
     pub button_levels: ButtonLevels,
-    tick: Tick,
 }
 impl Status {
-    pub fn new(interfaces: &mut Interfaces, tick: Tick) -> Self {
+    pub fn new(interfaces: &mut Interfaces) -> Self {
         let keycodes = interfaces.keyboard.get_keycodes();
         let button_levels = interfaces.buttons.get_levels();
         Self {
             keycodes,
             button_levels,
-            tick,
         }
     }
 }
@@ -64,21 +61,10 @@ pub enum Team {
     Di,
 }
 
-// Absolute and relative direction enum
-#[derive(Debug, PartialEq)]
-pub enum RelativeDirection {
-    Forward,
-    Backward,
-    Left,
-    Right,
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AbsoluteDirection {
     XPlus,
     XMinus,
-    YPlus,
-    YMinus,
 }
 
 // Players struct
@@ -92,23 +78,19 @@ impl Players {
             10,
             32,
             AbsoluteDirection::XPlus,
-            Team::Mono,
             vec![Keycode::F],
             vec![Keycode::D],
             vec![Keycode::R],
             vec![Keycode::C],
-            0,
         );
         let player2 = Player::new(
             128 - 10,
             32,
             AbsoluteDirection::XMinus,
-            Team::Di,
             vec![Keycode::J],
             vec![Keycode::K],
             vec![Keycode::M],
             vec![Keycode::I],
-            1,
         );
         Self { player1, player2 }
     }
@@ -118,44 +100,34 @@ pub struct Player {
     x: i32,
     y: i32,
     direction: AbsoluteDirection,
-    team: Team,
     forward_keys: Keycodes,
     backward_keys: Keycodes,
     left_keys: Keycodes,
     right_keys: Keycodes,
-    shoot_button_idx: usize,
     speed: i32,
     interval: u8,
-    bom: bool,
-    bom_time: u8,
 }
 impl Player {
     pub fn new(
         x: i32,
         y: i32,
         direction: AbsoluteDirection,
-        team: Team,
         forward_keys: Keycodes,
         backward_keys: Keycodes,
         left_keys: Keycodes,
         right_keys: Keycodes,
-        shoot_button_idx: usize,
     ) -> Self {
         let speed = 1;
         Self {
             x,
             y,
-            team,
             direction,
             forward_keys,
             backward_keys,
             left_keys,
             right_keys,
-            shoot_button_idx,
             speed,
             interval: 0,
-            bom: false,
-            bom_time: 0,
         }
     }
 
@@ -224,8 +196,6 @@ impl Player {
         let (dx, dy) = match self.direction {
             AbsoluteDirection::XPlus => (if self.x + forward < 50 { forward } else { 0 }, -left),
             AbsoluteDirection::XMinus => (if self.x - forward > 78 { -forward } else { 0 }, left),
-            AbsoluteDirection::YPlus => (left, -forward),
-            AbsoluteDirection::YMinus => (-left, forward),
         };
         self.move_by(dx * 2, dy);
     }
@@ -241,8 +211,8 @@ pub struct Guns {
 }
 impl Guns {
     pub fn new() -> Self {
-        let gun1 = Gun::new(AbsoluteDirection::XPlus, Team::Mono);
-        let gun2 = Gun::new(AbsoluteDirection::XMinus, Team::Di);
+        let gun1 = Gun::new(AbsoluteDirection::XPlus);
+        let gun2 = Gun::new(AbsoluteDirection::XMinus);
         Self { gun1, gun2 }
     }
 }
@@ -250,21 +220,19 @@ impl Guns {
 // Gun
 pub struct Gun {
     direction: AbsoluteDirection,
-    team: Team,
     thread_rng: rand::rngs::ThreadRng,
 }
 impl Gun {
-    pub fn new(direction: AbsoluteDirection, team: Team) -> Self {
+    pub fn new(direction: AbsoluteDirection) -> Self {
         let thread_rng = rand::thread_rng();
         Self {
             direction,
-            team,
             thread_rng,
         }
     }
     pub fn shoot(&mut self, player_x: i32) -> Bullet {
         let y = self.thread_rng.gen_range(0..=64);
-        Bullet::new(player_x, y, self.direction, self.team)
+        Bullet::new(player_x, y, self.direction)
     }
 }
 
@@ -275,8 +243,8 @@ pub struct Lasers {
 }
 impl Lasers {
     pub fn new() -> Self {
-        let laser1 = Laser::new(AbsoluteDirection::XPlus, Team::Mono);
-        let laser2 = Laser::new(AbsoluteDirection::XMinus, Team::Di);
+        let laser1 = Laser::new(AbsoluteDirection::XPlus);
+        let laser2 = Laser::new(AbsoluteDirection::XMinus);
         Self { laser1, laser2 }
     }
 }
@@ -284,19 +252,17 @@ impl Lasers {
 // Laser struct
 pub struct Laser {
     direction: AbsoluteDirection,
-    team: Team,
     thread_rng: rand::rngs::ThreadRng,
     emittable: bool,
     remaining_tick: Option<i32>,
 }
 impl Laser {
-    pub fn new(direction: AbsoluteDirection, team: Team) -> Self {
+    pub fn new(direction: AbsoluteDirection) -> Self {
         let thread_rng = rand::thread_rng();
         let emittable = false;
         let remaining_tick = None;
         Self {
             direction,
-            team,
             thread_rng,
             emittable,
             remaining_tick,
@@ -304,7 +270,6 @@ impl Laser {
     }
     pub fn try_emit(
         &mut self,
-        status: &Status,
         led: &mut Led,
         opponent_player_y: i32,
         button_level: Level,
@@ -312,7 +277,6 @@ impl Laser {
         match (self.remaining_tick, self.emittable, button_level) {
             (Some(0), _, _) => {
                 self.remaining_tick = None;
-                led.set_low();
             }
             (Some(t), _, _) => {
                 self.remaining_tick = Some(t - 1);
@@ -320,11 +284,12 @@ impl Laser {
             }
             (None, true, Low) => {
                 self.remaining_tick = Some(EMIT_TICK_SIZE);
+                led.set_low();
                 self.emittable = false;
-                Some(self.emit(opponent_player_y));
+                self.emit(opponent_player_y);
             }
             (None, false, _) => {
-                if self.thread_rng.gen_range(0..180) == 0 {
+                if self.thread_rng.gen_range(0..EMIT_PROBABILITY) == 0 {
                     led.set_high();
                     self.emittable = true;
                 }
@@ -335,20 +300,14 @@ impl Laser {
     }
     pub fn emit(&mut self, opponent_player_y: i32) -> Bullet {
         match self.direction {
-            AbsoluteDirection::XPlus => Bullet::new(
-                -LASER_SPAWN_POSITION,
-                opponent_player_y,
-                self.direction,
-                self.team,
-            ),
+            AbsoluteDirection::XPlus => {
+                Bullet::new(-LASER_SPAWN_POSITION, opponent_player_y, self.direction)
+            }
             AbsoluteDirection::XMinus => Bullet::new(
                 DISPLAY_SIZE_X - LASER_SPAWN_POSITION,
                 opponent_player_y,
                 self.direction,
-                self.team,
             ),
-            AbsoluteDirection::YPlus => unimplemented!(),
-            AbsoluteDirection::YMinus => unimplemented!(),
         }
     }
 }
@@ -361,19 +320,17 @@ pub struct Bullet {
     x: i32,
     y: i32,
     direction: AbsoluteDirection,
-    team: Team,
     speed: i32,
     pub active: bool,
 }
 impl Bullet {
-    fn new(x: i32, y: i32, direction: AbsoluteDirection, team: Team) -> Self {
+    fn new(x: i32, y: i32, direction: AbsoluteDirection) -> Self {
         let speed = 1;
         let active = true;
         Self {
             x,
             y,
             direction,
-            team,
             speed,
             active,
         }
@@ -383,8 +340,6 @@ impl Bullet {
         match self.direction {
             AbsoluteDirection::XPlus => self.transfer(self.speed, 0),
             AbsoluteDirection::XMinus => self.transfer(-self.speed, 0),
-            AbsoluteDirection::YPlus => self.transfer(0, self.speed),
-            AbsoluteDirection::YMinus => self.transfer(0, -self.speed),
         }
         if self.direction == AbsoluteDirection::XPlus {
             self.transfer(self.speed, 0);
@@ -423,37 +378,10 @@ impl Bullet {
                 .draw(display)
                 .unwrap();
             }
-            AbsoluteDirection::YPlus => {
-                Triangle::new(
-                    Point::new(self.x, self.y + 2),
-                    Point::new(self.x + 1, self.y - 2),
-                    Point::new(self.x - 1, self.y - 2),
-                )
-                .into_styled(style)
-                .draw(display)
-                .unwrap();
-            }
-            AbsoluteDirection::YMinus => {
-                Triangle::new(
-                    Point::new(self.x, self.y - 2),
-                    Point::new(self.x + 1, self.y + 2),
-                    Point::new(self.x - 1, self.y + 2),
-                )
-                .into_styled(style)
-                .draw(display)
-                .unwrap();
-            }
         }
     }
     pub fn get_position(&self) -> Position {
         Position::new(self.x, self.y)
-    }
-    pub fn move_to(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
-    }
-    fn move_by(&mut self, dx: i32, dy: i32) {
-        self.move_to(self.x + dx, self.y + dy);
     }
     pub fn disable(&mut self) {
         self.active = false;
