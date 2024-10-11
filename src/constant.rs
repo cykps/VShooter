@@ -1,13 +1,13 @@
 use std::time::Duration;
-
 // Pin
-pub const BUTTON1_PIN: u8 = 16;
-pub const BUTTON2_PIN: u8 = 26;
+pub const BUTTON1_PIN: u8 = 26;
+pub const BUTTON2_PIN: u8 = 4;
 pub const LED1_PIN: u8 = 19;
 pub const LED2_PIN: u8 = 20;
 
 // Tick
-pub const TICK_SIZE: Duration = Duration::from_millis(4);
+pub const TICK_SIZE: Duration = Duration::from_millis(3);
+pub const CLEAN_INTERVAL: u8 = 20;
 
 // Hitpoint
 pub const INITIAL_HITPOINT: i8 = 64;

@@ -231,7 +231,7 @@ impl Gun {
         }
     }
     pub fn shoot(&mut self, player_x: i32) -> Bullet {
-        let y = self.thread_rng.gen_range(-3..=64 + 3);
+        let y = self.thread_rng.gen_range(0..=64 + 6) - 3;
         Bullet::new(player_x, y, self.direction)
     }
 }

@@ -1,6 +1,6 @@
 use crate::constant::{
-    BULLET_DAMEGE, DISPLAY_MARGIN, DISPLAY_SIZE_X, DISPLAY_SIZE_Y, HIT_DISTANCE, INITIAL_HITPOINT,
-    RESULT_TICK_SIZE, SHOOT_INTERVAL, TICK_SIZE,
+    BULLET_DAMEGE, CLEAN_INTERVAL, DISPLAY_MARGIN, DISPLAY_SIZE_X, DISPLAY_SIZE_Y, HIT_DISTANCE,
+    INITIAL_HITPOINT, RESULT_TICK_SIZE, SHOOT_INTERVAL, TICK_SIZE,
 };
 use crate::interface::Interfaces;
 use crate::object::{Bullets, Guns, Lasers, Players, Status, Team};
@@ -23,6 +23,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
     let mut di_result_text: Option<&str> = None;
     let mut tick_for_exit: Option<i32> = None;
     let mut shooting_interval: u8 = 0;
+    let mut clean_interval: u8 = CLEAN_INTERVAL;
 
     let character_style = MonoTextStyle::new(&FONT_10X20, BinaryColor::On);
     let text_style = TextStyleBuilder::new().baseline(Baseline::Top);
@@ -129,20 +130,25 @@ pub fn shooting(interfaces: &mut Interfaces) {
         }
 
         // Remove bullets in outside of display
-        bullets_mono.retain(|b| {
-            b.active && {
-                let pos = b.get_position();
-                (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
-                    && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
-            }
-        });
-        bullets_di.retain(|b| {
-            b.active && {
-                let pos = b.get_position();
-                (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
-                    && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
-            }
-        });
+        if clean_interval == 0 {
+            clean_interval = CLEAN_INTERVAL;
+            bullets_mono.retain(|b| {
+                b.active && {
+                    let pos = b.get_position();
+                    (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
+                        && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
+                }
+            });
+            bullets_di.retain(|b| {
+                b.active && {
+                    let pos = b.get_position();
+                    (-DISPLAY_MARGIN < pos.x && pos.x < DISPLAY_SIZE_X + DISPLAY_MARGIN)
+                        && (-DISPLAY_MARGIN < pos.y && pos.y < DISPLAY_SIZE_Y + DISPLAY_MARGIN)
+                }
+            });
+        } else {
+            clean_interval -= 1;
+        }
 
         // Draw on display
         // clear display
