@@ -6,9 +6,10 @@ use embedded_graphics::{
     primitives::{Arc, PrimitiveStyleBuilder, StrokeAlignment},
     text::{Alignment, Baseline, Text, TextStyleBuilder},
 };
+use embedded_graphics_simulator::Window;
 use std::{thread, time::Duration};
 
-pub fn loading_ring(display: &mut Display) {
+pub fn loading_ring(display: &mut Display, window: &mut Window) {
     let arc_stroke = PrimitiveStyleBuilder::new()
         .stroke_color(BinaryColor::On)
         .stroke_width(5)
@@ -41,7 +42,7 @@ pub fn loading_ring(display: &mut Display) {
         .draw(display)
         .unwrap();
 
-        display.flush().unwrap();
+        window.update(display);
 
         thread::sleep(Duration::from_micros(1));
     }

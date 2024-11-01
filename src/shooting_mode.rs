@@ -221,7 +221,7 @@ pub fn shooting(interfaces: &mut Interfaces) {
         }
 
         // Flush display
-        interfaces.display.flush().unwrap();
+        interfaces.window.update(&(interfaces.display));
 
         // Exit
         match tick_for_exit {

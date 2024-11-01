@@ -1,23 +1,29 @@
 use crate::constant::{BUTTON1_PIN, BUTTON2_PIN, LED1_PIN, LED2_PIN};
 use device_query::{keymap::Keycode, DeviceQuery, DeviceState};
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics_simulator::{SimulatorDisplay, Window};
 use rppal::gpio::Gpio;
-use rppal::{
-    gpio::{InputPin, Level, OutputPin},
-    i2c::I2c,
-};
-use ssd1306::{mode::BufferedGraphicsMode, prelude::*, Ssd1306};
+use rppal::gpio::{InputPin, Level, OutputPin};
 
 // Interfaces
 pub struct Interfaces {
     pub display: Display,
+    pub window: Window,
     pub buttons: Buttons,
     pub leds: Leds,
     pub keyboard: Keyboard,
 }
 impl Interfaces {
-    pub fn new(display: Display, buttons: Buttons, leds: Leds, keyboard: Keyboard) -> Self {
+    pub fn new(
+        display: Display,
+        window: Window,
+        buttons: Buttons,
+        leds: Leds,
+        keyboard: Keyboard,
+    ) -> Self {
         Self {
             display,
+            window,
             buttons,
             leds,
             keyboard,
@@ -26,8 +32,7 @@ impl Interfaces {
 }
 
 // Display
-pub type Display =
-    Ssd1306<I2CInterface<I2c>, DisplaySize128x64, BufferedGraphicsMode<DisplaySize128x64>>;
+pub type Display = SimulatorDisplay<BinaryColor>;
 
 // Button
 pub struct Buttons {
